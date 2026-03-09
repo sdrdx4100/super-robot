@@ -145,10 +145,39 @@
       animation: damage-shake 0.4s ease-out;
     }
 
+    .unit-card.is-cooling {
+      opacity: .82;
+      border-color: rgba(148, 163, 184, .7);
+      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .18);
+    }
+
     .unit-name {
       font-weight: 700;
       font-size: .9rem;
       margin-bottom: 6px;
+    }
+
+    .phase-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: .65rem;
+      letter-spacing: .08em;
+      background: rgba(59,130,246,.18);
+      color: #bfdbfe;
+    }
+
+    .phase-badge.is-cooling {
+      background: rgba(148,163,184,.18);
+      color: #cbd5e1;
+    }
+
+    .phase-badge.is-ready {
+      background: rgba(251,191,36,.18);
+      color: #fde68a;
     }
 
     /* ================================================================
@@ -192,6 +221,7 @@
       background: rgba(255,255,255,.08);
       border-radius: 3px;
       overflow: hidden;
+      position: relative;
     }
 
     .gauge-fill {
@@ -199,6 +229,22 @@
       border-radius: 3px;
       background: linear-gradient(90deg, var(--accent-a), var(--gold));
       transition: width .2s;
+    }
+
+    .gauge-fill.is-cooling {
+      background: linear-gradient(90deg, #94a3b8, #475569);
+    }
+
+    .gauge-fill.is-ready {
+      background: linear-gradient(90deg, var(--gold), #fde68a);
+    }
+
+    .gauge-direction {
+      position: absolute;
+      top: -12px;
+      right: 2px;
+      font-size: .55rem;
+      color: var(--text-dim);
     }
 
     .team-b .gauge-fill {
@@ -414,9 +460,12 @@
     <svg id="timeline-svg" viewBox="0 0 900 60" preserveAspectRatio="xMidYMid meet">
       <!-- Track -->
       <rect x="20" y="28" width="860" height="4" rx="2" fill="#1e3a5f"/>
+      <line x1="20" y1="10" x2="20" y2="50" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 2"/>
+      <text x="6" y="14" fill="#94a3b8" font-size="9" font-family="sans-serif">BL</text>
       <!-- Command Line marker -->
       <line x1="880" y1="10" x2="880" y2="50" stroke="#fbbf24" stroke-width="2" stroke-dasharray="4 2"/>
       <text x="882" y="14" fill="#fbbf24" font-size="9" font-family="sans-serif">CL</text>
+      <text x="56" y="16" fill="#64748b" font-size="9" font-family="sans-serif">CHG → ACT → CLR ↩</text>
       <!-- Unit icons rendered by JS -->
       <g id="tl-icons"></g>
     </svg>
@@ -559,6 +608,8 @@ function buildRobotSVG(unit, team) {
 
 function buildUnitCard(unit, team, leaderIndex, idx) {
   const isLeader  = idx === leaderIndex;
+  const isCooling = unit.phase === 'CLR';
+  const isReady   = unit.phase === 'ACT';
   const partOrder = [
     {key: 'head', label: '頭部'},
     {key: 'ra',   label: '右腕'},
@@ -583,16 +634,21 @@ function buildUnitCard(unit, team, leaderIndex, idx) {
   }).join('');
 
   const gaugePct = Math.min(100, unit.gauge / 10);
+  const phaseClass = isCooling ? 'is-cooling' : (isReady ? 'is-ready' : '');
+  const phaseLabel = isCooling ? 'CLR ↩ 放熱' : (isReady ? 'ACT ⚡ 行動待機' : 'CHG → 充填');
+  const gaugeDir   = isCooling ? '← BASE' : '→ CMD';
 
   return `
-  <div class="unit-card ${isLeader ? 'is-leader' : ''} ${unit.incapacitated ? 'incapacitated' : ''}"
+  <div class="unit-card ${isLeader ? 'is-leader' : ''} ${unit.incapacitated ? 'incapacitated' : ''} ${isCooling ? 'is-cooling' : ''}"
        id="card-${unit.id}">
     <div class="unit-name">${unit.name}</div>
+    <div class="phase-badge ${phaseClass}" id="phase-${unit.id}">${phaseLabel}</div>
     ${buildRobotSVG(unit, team)}
     <div class="gauge-row">
       <span class="gauge-label">ゲージ</span>
       <div class="gauge-track">
-        <div class="gauge-fill" id="gauge-${unit.id}"
+        <span class="gauge-direction" id="gdir-${unit.id}">${gaugeDir}</span>
+        <div class="gauge-fill ${phaseClass}" id="gauge-${unit.id}"
              style="width:${gaugePct}%"></div>
       </div>
     </div>
@@ -631,12 +687,19 @@ function renderTeams(s) {
 function patchState(s) {
   const allUnits = [...s.team_a.units, ...s.team_b.units];
   allUnits.forEach(unit => {
+    const isCooling = unit.phase === 'CLR';
+    const isReady = unit.phase === 'ACT';
+
     // Gauge
     const gEl = document.getElementById(`gauge-${unit.id}`);
     if (gEl) {
       const pct = Math.min(100, unit.gauge / 10);
       gEl.style.width = pct + '%';
+      gEl.classList.toggle('is-cooling', isCooling);
+      gEl.classList.toggle('is-ready', isReady);
     }
+    const gDir = document.getElementById(`gdir-${unit.id}`);
+    if (gDir) gDir.textContent = isCooling ? '← BASE' : '→ CMD';
 
     // HP bars
     ['head', 'ra', 'la', 'leg'].forEach(key => {
@@ -653,6 +716,13 @@ function patchState(s) {
     const card = document.getElementById(`card-${unit.id}`);
     if (card) {
       card.classList.toggle('incapacitated', unit.incapacitated);
+      card.classList.toggle('is-cooling', isCooling);
+    }
+    const phaseEl = document.getElementById(`phase-${unit.id}`);
+    if (phaseEl) {
+      phaseEl.textContent = isCooling ? 'CLR ↩ 放熱' : (isReady ? 'ACT ⚡ 行動待機' : 'CHG → 充填');
+      phaseEl.classList.toggle('is-cooling', isCooling);
+      phaseEl.classList.toggle('is-ready', isReady);
     }
 
     // Update robot SVG (replace to reflect part destruction colours)
@@ -678,30 +748,42 @@ function renderTimeline(s) {
   const TRACK_X0 = 20, TRACK_W = 860;
   const ROW_A_Y = 20, ROW_B_Y = 45;
 
-  [...s.team_a.units].forEach((u, i) => {
-    const x  = TRACK_X0 + (u.gauge / 1000) * TRACK_W;
-    const col = u.incapacitated ? '#334155' : TL_COLORS_A[i];
-    const el  = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    el.setAttribute('transform', `translate(${x},${ROW_A_Y})`);
-    el.innerHTML = `
-      <circle r="8" fill="${col}" stroke="#fff" stroke-width="1.5" opacity="${u.incapacitated ? .3 : 1}"/>
-      <text x="0" y="4" text-anchor="middle" fill="#fff" font-size="7" font-family="sans-serif">${u.name[0]}</text>`;
-    if (!u.incapacitated && u.gauge >= 990) {
-      el.querySelector('circle').style.animation = 'command-pulse .5s ease-in-out infinite';
-    }
-    g.appendChild(el);
-  });
+  function renderRow(units, baseY, colors) {
+    const occupancy = new Map();
+    [...units]
+      .map((u, i) => ({u, i, x: TRACK_X0 + (u.gauge / 1000) * TRACK_W}))
+      .sort((a, b) => a.x - b.x)
+      .forEach(({u, i, x}) => {
+        const bucket = Math.round(x / 18);
+        const depth = occupancy.get(bucket) || 0;
+        occupancy.set(bucket, depth + 1);
 
-  [...s.team_b.units].forEach((u, i) => {
-    const x  = TRACK_X0 + (u.gauge / 1000) * TRACK_W;
-    const col = u.incapacitated ? '#334155' : TL_COLORS_B[i];
-    const el  = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    el.setAttribute('transform', `translate(${x},${ROW_B_Y})`);
-    el.innerHTML = `
-      <circle r="8" fill="${col}" stroke="#fff" stroke-width="1.5" opacity="${u.incapacitated ? .3 : 1}"/>
-      <text x="0" y="4" text-anchor="middle" fill="#fff" font-size="7" font-family="sans-serif">${u.name[0]}</text>`;
-    g.appendChild(el);
-  });
+        const yOffset = depth * 10 * (baseY === ROW_A_Y ? -1 : 1);
+        const col = u.incapacitated ? '#334155' : colors[i];
+        const stroke = u.phase === 'CLR' ? '#cbd5e1' : '#fff';
+        const el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        el.setAttribute('transform', `translate(${x},${baseY + yOffset})`);
+
+        const coolingArrow = u.phase === 'CLR'
+          ? '<text x="0" y="-11" text-anchor="middle" fill="#cbd5e1" font-size="8" font-family="sans-serif">↩</text>'
+          : '';
+        const readyHalo = u.phase === 'ACT'
+          ? '<circle r="11" fill="none" stroke="#fbbf24" stroke-width="1.5" opacity=".65"/>' : '';
+
+        el.innerHTML = `
+          ${readyHalo}
+          <circle r="8" fill="${col}" stroke="${stroke}" stroke-width="1.5" opacity="${u.incapacitated ? .3 : (u.phase === 'CLR' ? .65 : 1)}"/>
+          ${coolingArrow}
+          <text x="0" y="4" text-anchor="middle" fill="#fff" font-size="7" font-family="sans-serif">${u.name[0]}</text>`;
+        if (!u.incapacitated && u.phase === 'ACT') {
+          el.querySelector('circle').style.animation = 'command-pulse .5s ease-in-out infinite';
+        }
+        g.appendChild(el);
+      });
+  }
+
+  renderRow(s.team_a.units, ROW_A_Y, TL_COLORS_A);
+  renderRow(s.team_b.units, ROW_B_Y, TL_COLORS_B);
 }
 
 // ── Event log ────────────────────────────────────────────────────────
@@ -714,6 +796,8 @@ function appendEvents(events) {
 
     if (ev.action === 'HEAL') {
       body = `<span class="heal">+${Math.abs(ev.damage).toFixed(0)} 回復</span> → ${ev.target_name}`;
+    } else if (ev.action === 'COOLING') {
+      body = ev.note || 'ベースラインへ帰還開始';
     } else if (ev.action === 'GUARD') {
       body = `ガード！`;
     } else if (ev.action === 'SUPPORT') {
@@ -724,6 +808,9 @@ function appendEvents(events) {
       body = `ミス！（${ev.target_name}）`;
     } else {
       body = `<span class="dmg">${ev.damage.toFixed(0)} ダメージ</span> → ${ev.target_name}`;
+      if (ev.note) {
+        body += ` ${ev.note}`;
+      }
       if (ev.part_destroyed) {
         body += ` <span class="destroy"> 🔥${ev.part_destroyed}</span>`;
       }
