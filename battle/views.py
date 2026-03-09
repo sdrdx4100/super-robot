@@ -243,7 +243,7 @@ def _state_to_dict(state: BattleState) -> dict[str, Any]:
 
 
 def _iter_units(state: BattleState) -> list[tuple[str, Any]]:
-    """Yield every unit in the state alongside its team label."""
+    """Return every unit in the state alongside its team label."""
     units: list[tuple[str, Any]] = []
     for team_label, team in (("A", state.team_a), ("B", state.team_b)):
         for unit in team.units:
@@ -266,9 +266,9 @@ def _find_unit_context(state: BattleState, unit_name: str | None) -> dict[str, A
     return None
 
 
-def _find_part_context(unit: Any, part_name: str) -> tuple[str | None, Any | None]:
+def _find_part_context(unit: Any | None, part_name: str | None) -> tuple[str | None, Any | None]:
     """Resolve an event part name back to a part slot on the unit."""
-    if unit is None:
+    if unit is None or not part_name:
         return None, None
     for key in ("head", "ra", "la", "leg"):
         part = getattr(unit, f"part_{key}")
@@ -299,8 +299,9 @@ def _build_event_stack(
         actor_ctx = actor_after or actor_before
         target_ctx = target_after or target_before
         actor_part_key = actor_part_system = None
+        event_part_name = event.get("part_name")
         if actor_ctx:
-            actor_part_key, actor_part = _find_part_context(actor_ctx["unit"], event.get("part_name", ""))
+            actor_part_key, actor_part = _find_part_context(actor_ctx["unit"], event_part_name)
             actor_part_system = actor_part.system.value if actor_part else None
         else:
             actor_part = None
@@ -325,7 +326,7 @@ def _build_event_stack(
             {
                 **event,
                 "actor_id": actor_ctx["id"] if actor_ctx else None,
-                "actor_team": actor_ctx["team"] if actor_ctx else event.get("actor_team", ""),
+                "actor_team": actor_ctx["team"] if actor_ctx else event.get("actor_team"),
                 "actor_part_key": actor_part_key,
                 "actor_part_system": actor_part_system,
                 "target_id": target_ctx["id"] if target_ctx else None,

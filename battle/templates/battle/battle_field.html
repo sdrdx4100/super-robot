@@ -881,6 +881,10 @@ function sleep(ms) {
   return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
+function hasValue(value) {
+  return value !== null && value !== undefined;
+}
+
 function findUnitById(s, unitId) {
   return [...s.team_a.units, ...s.team_b.units].find(unit => unit.id === unitId) || null;
 }
@@ -1274,8 +1278,8 @@ function buildRevealPopup(unit, eventMeta) {
   const impactedBefore = eventMeta.hp_before;
   const impactedAfter = eventMeta.hp_after;
   const entries = getPartEntries(unit).map(({key, label, data}) => {
-    const beforeValue = key === impactedKey && impactedBefore !== null && impactedBefore !== undefined ? impactedBefore : data.current_hp;
-    const afterValue = key === impactedKey && impactedAfter !== null && impactedAfter !== undefined ? impactedAfter : data.current_hp;
+    const beforeValue = key === impactedKey && hasValue(impactedBefore) ? impactedBefore : data.current_hp;
+    const afterValue = key === impactedKey && hasValue(impactedAfter) ? impactedAfter : data.current_hp;
     const beforePct = data.max_hp > 0 ? Math.max(0, beforeValue / data.max_hp) : 0;
     const afterPct = data.max_hp > 0 ? Math.max(0, afterValue / data.max_hp) : 0;
     return `
@@ -1329,7 +1333,7 @@ function animateRevealBars(eventMeta) {
   window.setTimeout(() => {
     fill.style.width = `${afterPct}%`;
     fill.style.backgroundColor = hpColor(afterPct / 100);
-    if (text && eventMeta.hp_after !== null && eventMeta.hp_after !== undefined && eventMeta.hp_max !== null && eventMeta.hp_max !== undefined) {
+    if (text && hasValue(eventMeta.hp_after) && hasValue(eventMeta.hp_max)) {
       text.textContent = `${eventMeta.hp_after}/${eventMeta.hp_max}`;
     }
   }, 80);
@@ -1377,6 +1381,7 @@ async function playEventSequence(eventMeta) {
   await sleep(PHASE_TIMINGS.action - 120);
 
   document.getElementById('impact-flash').classList.remove('active');
+  // Force a reflow so the flash animation reliably restarts for each action.
   void document.getElementById('impact-flash').offsetWidth;
   document.getElementById('impact-flash').classList.add('active');
   if (target) {
@@ -1411,6 +1416,7 @@ async function playEventSequence(eventMeta) {
     damageNumber.style.color = 'var(--red)';
   }
   damageNumber.classList.remove('show');
+  // Force a reflow so the damage pop animation restarts with the new value.
   void damageNumber.offsetWidth;
   damageNumber.classList.add('show');
 
