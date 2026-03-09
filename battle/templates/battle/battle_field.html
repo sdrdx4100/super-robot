@@ -5,38 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>3vs3 メダロット風タクティカル・シミュレーター</title>
   <style>
-    /* ================================================================
-       GLOBAL RESET & THEME
-    ================================================================ */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg-dark:   #0a0e1a;
-      --bg-panel:  #111827;
-      --border:    #1e3a5f;
-      --accent-a:  #3b82f6;   /* Team A blue */
-      --accent-b:  #ef4444;   /* Team B red  */
-      --gold:      #fbbf24;
-      --text:      #e2e8f0;
-      --text-dim:  #64748b;
-      --green:     #22c55e;
-      --yellow:    #facc15;
-      --red:       #f87171;
-      --orange:    #fb923c;
+      --bg-dark: #050914;
+      --bg-panel: #0f172a;
+      --bg-panel-strong: #111c33;
+      --border: #1e3a5f;
+      --accent-a: #38bdf8;
+      --accent-b: #fb7185;
+      --gold: #fbbf24;
+      --text: #e2e8f0;
+      --text-dim: #64748b;
+      --green: #22c55e;
+      --yellow: #facc15;
+      --red: #f87171;
+      --orange: #fb923c;
+      --overlay: rgba(4, 8, 20, .82);
     }
 
     html, body {
-      width: 100%; height: 100%;
-      background: var(--bg-dark);
+      width: 100%;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at top, rgba(56, 189, 248, .12), transparent 26%),
+        radial-gradient(circle at bottom, rgba(251, 113, 133, .12), transparent 28%),
+        var(--bg-dark);
       color: var(--text);
       font-family: "Segoe UI", "Helvetica Neue", sans-serif;
       font-size: 14px;
       overflow-x: hidden;
     }
 
-    /* ================================================================
-       LAYOUT
-    ================================================================ */
+    body.cinematic-mode {
+      overflow: hidden;
+    }
+
     #app {
       display: flex;
       flex-direction: column;
@@ -47,188 +51,239 @@
 
     h1 {
       text-align: center;
-      font-size: 1.3rem;
-      letter-spacing: .1em;
+      font-size: 1.2rem;
+      letter-spacing: .18em;
       color: var(--gold);
-      text-shadow: 0 0 12px rgba(251,191,36,.4);
+      text-shadow: 0 0 18px rgba(251, 191, 36, .35);
     }
 
-    /* ================================================================
-       TIMELINE SECTION
-    ================================================================ */
-    #timeline-section {
-      background: var(--bg-panel);
+    #timeline-section,
+    .team-panel,
+    #event-log {
+      background: linear-gradient(180deg, rgba(17, 28, 51, .98), rgba(9, 15, 29, .98));
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 12px;
+      border-radius: 12px;
+      box-shadow: 0 20px 30px rgba(0, 0, 0, .18);
     }
 
-    #timeline-section h2 {
-      font-size: .75rem;
+    #timeline-section {
+      padding: 10px 14px;
+    }
+
+    #timeline-section h2,
+    #event-log h2 {
+      font-size: .72rem;
       text-transform: uppercase;
-      letter-spacing: .12em;
+      letter-spacing: .14em;
       color: var(--text-dim);
       margin-bottom: 6px;
     }
 
     #timeline-svg {
       width: 100%;
-      height: 60px;
+      height: 68px;
       display: block;
     }
 
-    /* ================================================================
-       BATTLEFIELD
-    ================================================================ */
+    #battlefield-shell {
+      position: relative;
+      flex: 1;
+      min-height: 420px;
+    }
+
     #battlefield {
       display: flex;
       gap: 10px;
-      flex: 1;
+      min-height: 100%;
     }
 
     .team-panel {
       flex: 1;
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px;
+      padding: 12px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
+      transition: filter .3s ease, opacity .3s ease;
     }
 
-    .team-panel.team-a { border-color: var(--accent-a); }
-    .team-panel.team-b { border-color: var(--accent-b); }
+    .team-panel.team-a { border-color: rgba(56, 189, 248, .7); }
+    .team-panel.team-b { border-color: rgba(251, 113, 133, .7); }
 
     .team-title {
       font-size: .85rem;
-      font-weight: 700;
+      font-weight: 800;
       text-align: center;
-      padding-bottom: 4px;
-      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(100, 116, 139, .3);
+      letter-spacing: .08em;
     }
 
     .team-a .team-title { color: var(--accent-a); }
     .team-b .team-title { color: var(--accent-b); }
 
-    /* ================================================================
-       UNIT CARD
-    ================================================================ */
+    #vs-column {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      flex-shrink: 0;
+    }
+
+    #vs-text {
+      font-size: 1.5rem;
+      font-weight: 900;
+      color: var(--gold);
+      writing-mode: vertical-rl;
+      text-shadow: 0 0 12px rgba(251, 191, 36, .55);
+      letter-spacing: .22em;
+    }
+
     .unit-card {
-      background: rgba(255,255,255,.03);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 8px;
       position: relative;
-      transition: border-color .3s;
+      overflow: hidden;
+      background: rgba(255, 255, 255, .03);
+      border: 1px solid rgba(100, 116, 139, .28);
+      border-radius: 10px;
+      padding: 10px;
+      transition: transform .25s ease, border-color .25s ease, filter .25s ease, opacity .25s ease;
+      backdrop-filter: blur(4px);
+    }
+
+    .unit-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,.06), transparent 50%);
+      pointer-events: none;
     }
 
     .unit-card.is-leader::before {
       content: "★";
       position: absolute;
-      top: 4px; right: 6px;
+      top: 6px;
+      right: 8px;
       color: var(--gold);
       font-size: .85rem;
+      z-index: 2;
     }
 
     .unit-card.incapacitated {
-      opacity: .4;
+      opacity: .45;
       filter: grayscale(1);
     }
 
-    .unit-card.acting {
+    .unit-card.is-cooling {
+      border-color: rgba(148, 163, 184, .55);
+      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .14);
+    }
+
+    .unit-card.focused {
       border-color: var(--gold) !important;
-      animation: card-glow 0.6s ease-out;
+      box-shadow: 0 0 28px rgba(251, 191, 36, .28);
+      transform: scale(1.03);
+      z-index: 2;
+    }
+
+    .unit-card.targeted {
+      border-color: rgba(255,255,255,.55);
+      box-shadow: 0 0 24px rgba(255,255,255,.12);
+    }
+
+    .unit-card.muted {
+      opacity: .22;
+      filter: brightness(.45) grayscale(.35);
+    }
+
+    .unit-card.acting {
+      animation: card-glow .55s ease-out;
     }
 
     .unit-card.hit-shake {
-      animation: damage-shake 0.4s ease-out;
-    }
-
-    .unit-card.is-cooling {
-      opacity: .82;
-      border-color: rgba(148, 163, 184, .7);
-      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .18);
+      animation: damage-shake .38s ease-out;
     }
 
     .unit-name {
-      font-weight: 700;
-      font-size: .9rem;
+      font-weight: 800;
+      font-size: .92rem;
       margin-bottom: 6px;
+      letter-spacing: .04em;
     }
 
     .phase-badge {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      margin-bottom: 6px;
-      padding: 2px 8px;
+      margin-bottom: 8px;
+      padding: 3px 9px;
       border-radius: 999px;
-      font-size: .65rem;
-      letter-spacing: .08em;
-      background: rgba(59,130,246,.18);
-      color: #bfdbfe;
+      font-size: .62rem;
+      letter-spacing: .09em;
+      background: rgba(56, 189, 248, .16);
+      color: #bae6fd;
     }
 
     .phase-badge.is-cooling {
-      background: rgba(148,163,184,.18);
+      background: rgba(148, 163, 184, .16);
       color: #cbd5e1;
     }
 
     .phase-badge.is-ready {
-      background: rgba(251,191,36,.18);
+      background: rgba(251, 191, 36, .16);
       color: #fde68a;
     }
 
-    /* ================================================================
-       SVG ROBOT
-    ================================================================ */
+    .robot-wrap {
+      position: relative;
+      margin-bottom: 4px;
+    }
+
     .robot-svg {
       display: block;
-      margin: 0 auto 6px;
-      width: 80px;
-      height: 80px;
+      margin: 0 auto;
+      width: 86px;
+      height: 86px;
       overflow: visible;
+      filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .28));
     }
 
     .robot-svg.team-b { transform: scaleX(-1); }
 
-    /* Part flash for destruction */
     .part-destroy {
-      animation: destroy 1s ease-out forwards;
+      animation: destroy .8s ease-out forwards;
     }
 
-    /* ================================================================
-       GAUGE BAR (timeline position)
-    ================================================================ */
     .gauge-row {
       display: flex;
       align-items: center;
       gap: 6px;
-      margin-bottom: 4px;
+      margin-bottom: 8px;
     }
 
     .gauge-label {
-      font-size: .65rem;
+      font-size: .62rem;
       color: var(--text-dim);
       width: 30px;
       flex-shrink: 0;
     }
 
     .gauge-track {
-      flex: 1;
-      height: 6px;
-      background: rgba(255,255,255,.08);
-      border-radius: 3px;
-      overflow: hidden;
       position: relative;
+      flex: 1;
+      height: 8px;
+      background: rgba(255,255,255,.08);
+      border-radius: 999px;
+      overflow: hidden;
     }
 
     .gauge-fill {
       height: 100%;
-      border-radius: 3px;
+      border-radius: 999px;
       background: linear-gradient(90deg, var(--accent-a), var(--gold));
-      transition: width .2s;
+      transition: width .25s linear;
+    }
+
+    .team-b .gauge-fill {
+      background: linear-gradient(90deg, var(--accent-b), var(--orange));
     }
 
     .gauge-fill.is-cooling {
@@ -241,29 +296,54 @@
 
     .gauge-direction {
       position: absolute;
-      top: -12px;
+      top: -13px;
       right: 2px;
-      font-size: .55rem;
+      font-size: .52rem;
       color: var(--text-dim);
     }
 
-    .team-b .gauge-fill {
-      background: linear-gradient(90deg, var(--accent-b), var(--orange));
+    .parts-seal {
+      font-size: .62rem;
+      letter-spacing: .14em;
+      color: rgba(226, 232, 240, .48);
+      text-align: center;
+      padding: 6px 0 2px;
+      text-transform: uppercase;
     }
 
-    /* ================================================================
-       PART HP BARS
-    ================================================================ */
     .parts-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 4px;
+      gap: 6px;
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: max-height .35s ease, opacity .35s ease, transform .35s ease;
+    }
+
+    .parts-grid.is-revealed {
+      max-height: 240px;
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
     }
 
     .part-row {
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 3px;
+      padding: 4px 6px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.04);
+      transition: opacity .25s ease, filter .25s ease, transform .25s ease;
+    }
+
+    .part-row.is-destroyed {
+      opacity: .35;
+      filter: grayscale(1);
+      transform: scale(.98);
     }
 
     .part-label {
@@ -271,78 +351,61 @@
       color: var(--text-dim);
       display: flex;
       justify-content: space-between;
+      gap: 4px;
     }
 
     .hp-track {
-      height: 5px;
+      height: 6px;
       background: rgba(255,255,255,.06);
-      border-radius: 3px;
+      border-radius: 999px;
       overflow: hidden;
     }
 
     .hp-fill {
       height: 100%;
-      border-radius: 3px;
-      transition: width .4s, background-color .4s;
+      border-radius: 999px;
+      transition: width .55s ease, background-color .35s ease;
     }
 
-    /* ================================================================
-       CENTER DIVIDER
-    ================================================================ */
-    #vs-column {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 36px;
-      flex-shrink: 0;
-    }
-
-    #vs-text {
-      font-size: 1.4rem;
-      font-weight: 900;
+    #status-banner {
+      text-align: center;
+      font-size: 1rem;
+      font-weight: 800;
+      min-height: 26px;
       color: var(--gold);
-      writing-mode: vertical-rl;
-      text-shadow: 0 0 10px rgba(251,191,36,.6);
-      letter-spacing: .2em;
+      letter-spacing: .08em;
     }
 
-    /* ================================================================
-       EVENT LOG
-    ================================================================ */
+    #status-banner.win-a { color: var(--accent-a); }
+    #status-banner.win-b { color: var(--accent-b); }
+
     #event-log {
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
       padding: 8px 12px;
-      max-height: 160px;
+      max-height: 128px;
       overflow-y: auto;
+      opacity: .62;
     }
 
-    #event-log h2 {
-      font-size: .75rem;
-      text-transform: uppercase;
-      letter-spacing: .12em;
-      color: var(--text-dim);
-      margin-bottom: 4px;
+    #log-entries {
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 4px;
     }
 
     .event-entry {
-      font-size: .78rem;
-      padding: 2px 0;
-      border-bottom: 1px solid rgba(255,255,255,.04);
-      line-height: 1.4;
+      font-size: .72rem;
+      line-height: 1.35;
+      padding: 1px 0;
+      border-bottom: 1px solid rgba(255,255,255,.03);
     }
 
     .event-entry .tick { color: var(--text-dim); margin-right: 6px; }
-    .event-entry .actor-a { color: var(--accent-a); font-weight: 600; }
-    .event-entry .actor-b { color: var(--accent-b); font-weight: 600; }
+    .event-entry .actor-a { color: var(--accent-a); font-weight: 700; }
+    .event-entry .actor-b { color: var(--accent-b); font-weight: 700; }
     .event-entry .dmg { color: var(--red); font-weight: 700; }
     .event-entry .heal { color: var(--green); font-weight: 700; }
     .event-entry .destroy { color: var(--orange); font-weight: 700; }
 
-    /* ================================================================
-       CONTROLS
-    ================================================================ */
     #controls {
       display: flex;
       justify-content: center;
@@ -353,100 +416,367 @@
     .btn {
       padding: 8px 20px;
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
       font-size: .85rem;
-      font-weight: 700;
+      font-weight: 800;
       cursor: pointer;
-      transition: filter .2s, transform .1s;
+      transition: filter .18s ease, transform .1s ease;
     }
 
-    .btn:hover { filter: brightness(1.2); }
+    .btn:hover { filter: brightness(1.12); }
     .btn:active { transform: scale(.96); }
-
-    .btn-primary { background: var(--accent-a); color: #fff; }
+    .btn-primary { background: var(--accent-a); color: #04111d; }
     .btn-danger  { background: var(--accent-b); color: #fff; }
     .btn-neutral { background: #334155; color: var(--text); }
 
-    /* ================================================================
-       STATUS BANNER
-    ================================================================ */
-    #status-banner {
-      text-align: center;
-      font-size: 1.1rem;
-      font-weight: 700;
-      min-height: 28px;
-      color: var(--gold);
+    #cinematic-layer {
+      position: absolute;
+      inset: 0;
+      border-radius: 14px;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity .18s ease;
+      z-index: 20;
     }
 
-    #status-banner.win-a { color: var(--accent-a); }
-    #status-banner.win-b { color: var(--accent-b); }
+    #cinematic-layer.active {
+      opacity: 1;
+      visibility: visible;
+    }
 
-    /* ================================================================
-       CSS ANIMATIONS
-    ================================================================ */
+    #cinematic-dimmer {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(0, 0, 0, .35), var(--overlay));
+      backdrop-filter: blur(2px);
+      opacity: 0;
+      transition: opacity .25s ease;
+    }
 
-    /* Unit dashes forward when acting */
+    #cinematic-layer.active #cinematic-dimmer { opacity: 1; }
+
+    #target-line-layer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #target-line {
+      stroke: var(--gold);
+      stroke-width: 1.5;
+      stroke-dasharray: 5 4;
+      fill: none;
+      filter: drop-shadow(0 0 10px rgba(251, 191, 36, .8));
+      opacity: 0;
+      transition: opacity .2s ease;
+    }
+
+    #cinematic-layer.phase-selection #target-line,
+    #cinematic-layer.phase-action #target-line,
+    #cinematic-layer.phase-impact #target-line {
+      opacity: 1;
+      animation: line-pulse .55s linear infinite;
+    }
+
+    .focus-unit {
+      position: absolute;
+      top: 56%;
+      width: 170px;
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: linear-gradient(180deg, rgba(15, 23, 42, .96), rgba(5, 9, 20, .96));
+      box-shadow: 0 24px 35px rgba(0,0,0,.35);
+      text-align: center;
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(.8);
+      transition: left .36s ease, top .36s ease, transform .36s ease, opacity .22s ease;
+    }
+
+    .focus-unit .robot-svg {
+      width: 110px;
+      height: 110px;
+      margin-bottom: 6px;
+    }
+
+    .focus-unit .focus-label {
+      font-size: .7rem;
+      letter-spacing: .15em;
+      color: rgba(255,255,255,.62);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .focus-unit .focus-name {
+      font-size: 1rem;
+      font-weight: 900;
+      letter-spacing: .08em;
+    }
+
+    .focus-unit.actor { left: 24%; }
+    .focus-unit.target { left: 76%; }
+
+    #cinematic-layer.phase-selection .focus-unit,
+    #cinematic-layer.phase-declaration .focus-unit,
+    #cinematic-layer.phase-action .focus-unit,
+    #cinematic-layer.phase-impact .focus-unit {
+      opacity: 1;
+    }
+
+    #cinematic-layer.phase-selection .focus-unit.actor,
+    #cinematic-layer.phase-declaration .focus-unit.actor {
+      left: 50%;
+      top: 52%;
+      transform: translate(-50%, -50%) scale(1.18);
+      border-color: rgba(251, 191, 36, .8);
+      box-shadow: 0 0 34px rgba(251, 191, 36, .22);
+    }
+
+    #cinematic-layer.phase-declaration .focus-unit.target {
+      opacity: .26;
+      transform: translate(-50%, -50%) scale(.84);
+    }
+
+    #cinematic-layer.phase-action .focus-unit.actor {
+      transform: translate(-50%, -50%) scale(1.06);
+    }
+
+    #cinematic-layer.phase-action .focus-unit.actor.dash-right {
+      left: 64%;
+    }
+
+    #cinematic-layer.phase-action .focus-unit.actor.dash-left {
+      left: 36%;
+    }
+
+    #cinematic-layer.phase-impact .focus-unit.target {
+      transform: translate(-50%, -50%) scale(1.08);
+      border-color: rgba(255,255,255,.65);
+    }
+
+    #declaration-banner {
+      position: absolute;
+      left: 50%;
+      top: 16%;
+      transform: translateX(-50%) scale(.92);
+      width: min(86%, 880px);
+      padding: 18px 28px;
+      border: 2px solid rgba(251, 191, 36, .75);
+      border-radius: 16px;
+      background: linear-gradient(90deg, rgba(5, 9, 20, .96), rgba(30, 58, 95, .96), rgba(5, 9, 20, .96));
+      color: #fff7d6;
+      text-align: center;
+      font-weight: 900;
+      font-size: clamp(1.2rem, 3vw, 2.25rem);
+      letter-spacing: .14em;
+      text-shadow: 0 0 16px rgba(251, 191, 36, .32);
+      opacity: 0;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+
+    #cinematic-layer.phase-declaration #declaration-banner,
+    #cinematic-layer.phase-action #declaration-banner,
+    #cinematic-layer.phase-impact #declaration-banner {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+      animation: banner-rumble .16s linear 3;
+    }
+
+    #impact-flash {
+      position: absolute;
+      inset: 18% 10%;
+      border-radius: 18px;
+      background: radial-gradient(circle, rgba(255,255,255,.95) 0%, rgba(255,255,255,.18) 42%, transparent 72%);
+      opacity: 0;
+      transform: scale(.7);
+    }
+
+    #impact-flash.active {
+      animation: flash-burst .28s ease-out forwards;
+    }
+
+    #damage-number {
+      position: absolute;
+      left: 73%;
+      top: 24%;
+      transform: translate(-50%, 0) scale(.55);
+      font-size: clamp(1.3rem, 4vw, 2.8rem);
+      font-weight: 900;
+      color: var(--red);
+      text-shadow: 0 0 12px rgba(248, 113, 113, .6);
+      opacity: 0;
+    }
+
+    #damage-number.show {
+      animation: damage-pop .9s ease-out forwards;
+    }
+
+    #reveal-popup {
+      position: absolute;
+      right: 6%;
+      bottom: 8%;
+      width: min(360px, 42vw);
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: linear-gradient(180deg, rgba(15,23,42,.96), rgba(5,9,20,.96));
+      box-shadow: 0 20px 32px rgba(0,0,0,.34);
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity .22s ease, transform .22s ease;
+    }
+
+    #reveal-popup.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .popup-title {
+      font-size: .74rem;
+      color: var(--gold);
+      letter-spacing: .14em;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    .popup-name {
+      font-size: 1rem;
+      font-weight: 900;
+      margin-bottom: 10px;
+    }
+
+    .popup-parts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .popup-part {
+      padding: 8px;
+      border-radius: 10px;
+      background: rgba(255,255,255,.04);
+      transition: box-shadow .2s ease, transform .2s ease, opacity .2s ease, filter .2s ease;
+    }
+
+    .popup-part.highlight {
+      box-shadow: 0 0 0 1px rgba(251, 191, 36, .55), 0 0 18px rgba(251, 191, 36, .22);
+      transform: scale(1.02);
+    }
+
+    .popup-part.destroyed {
+      opacity: .3;
+      filter: grayscale(1);
+    }
+
+    .popup-part .part-label {
+      font-size: .64rem;
+    }
+
+    #destroy-warning {
+      position: absolute;
+      left: 50%;
+      bottom: 11%;
+      transform: translateX(-50%) scale(.8);
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: 2px solid rgba(248, 113, 113, .7);
+      background: rgba(127, 29, 29, .92);
+      color: #fee2e2;
+      font-size: 1rem;
+      font-weight: 900;
+      letter-spacing: .16em;
+      opacity: 0;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+
+    #destroy-warning.active {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+      animation: banner-rumble .18s linear 2;
+    }
+
     @keyframes dash-right {
-      0%   { transform: translateX(0); }
-      40%  { transform: translateX(30px); }
-      70%  { transform: translateX(30px); }
+      0% { transform: translateX(0); }
+      50% { transform: translateX(30px); }
       100% { transform: translateX(0); }
     }
 
     @keyframes dash-left {
-      0%   { transform: translateX(0); }
-      40%  { transform: translateX(-30px); }
-      70%  { transform: translateX(-30px); }
+      0% { transform: translateX(0); }
+      50% { transform: translateX(-30px); }
       100% { transform: translateX(0); }
     }
 
     @keyframes card-glow {
-      0%   { box-shadow: 0 0 0 2px var(--gold); }
-      50%  { box-shadow: 0 0 16px 4px var(--gold); }
+      0% { box-shadow: 0 0 0 2px rgba(251, 191, 36, .6); }
+      50% { box-shadow: 0 0 20px 5px rgba(251, 191, 36, .42); }
       100% { box-shadow: none; }
     }
 
-    /* Target shakes on hit */
     @keyframes damage-shake {
-      0%,100% { transform: translateX(0); }
-      15%     { transform: translateX(-8px) rotate(-2deg); }
-      30%     { transform: translateX(8px)  rotate(2deg);  }
-      45%     { transform: translateX(-6px) rotate(-1deg); }
-      60%     { transform: translateX(6px)  rotate(1deg);  }
-      75%     { transform: translateX(-3px); }
+      0%, 100% { transform: translateX(0); }
+      18% { transform: translateX(-8px) rotate(-2deg); }
+      36% { transform: translateX(8px) rotate(2deg); }
+      54% { transform: translateX(-6px) rotate(-1deg); }
+      72% { transform: translateX(6px) rotate(1deg); }
     }
 
-    /* Part shatters and fades on destruction */
     @keyframes destroy {
-      0%   { opacity: 1;   transform: scale(1)    rotate(0deg); }
-      30%  { opacity: .9;  transform: scale(1.15) rotate(-5deg); }
-      60%  { opacity: .4;  transform: scale(.8)   rotate(10deg); }
-      100% { opacity: 0;   transform: scale(.3)   rotate(-20deg); }
+      0% { opacity: 1; transform: scale(1) rotate(0deg); }
+      35% { opacity: .82; transform: scale(1.1) rotate(-7deg); }
+      70% { opacity: .4; transform: scale(.85) rotate(10deg); }
+      100% { opacity: .1; transform: scale(.55) rotate(-14deg); }
     }
 
-    /* Timeline icons pulse when at command line */
     @keyframes command-pulse {
       0%, 100% { r: 8; }
-      50%       { r: 11; filter: drop-shadow(0 0 6px currentColor); }
+      50% { r: 11; filter: drop-shadow(0 0 6px currentColor); }
     }
 
-    /* "Miss" flash */
-    @keyframes miss-flash {
-      0%   { opacity: 1; }
-      50%  { opacity: .2; }
-      100% { opacity: 1; }
+    @keyframes banner-rumble {
+      0%, 100% { transform: translateX(-50%) scale(1); }
+      25% { transform: translateX(calc(-50% - 3px)) scale(1.02); }
+      75% { transform: translateX(calc(-50% + 3px)) scale(.99); }
     }
 
-    .robot-svg.dash-right { animation: dash-right .5s ease-in-out; }
-    .robot-svg.dash-left  { animation: dash-left  .5s ease-in-out; }
+    @keyframes flash-burst {
+      0% { opacity: 0; transform: scale(.7); }
+      20% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.2); }
+    }
 
-    /* ================================================================
-       RESPONSIVE
-    ================================================================ */
+    @keyframes damage-pop {
+      0% { opacity: 0; transform: translate(-50%, 14px) scale(.45); }
+      15% { opacity: 1; transform: translate(-50%, -10px) scale(1.06); }
+      60% { opacity: 1; transform: translate(-50%, -24px) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -46px) scale(.92); }
+    }
+
+    @keyframes line-pulse {
+      0% { stroke-dashoffset: 0; }
+      100% { stroke-dashoffset: -18; }
+    }
+
+    @media (max-width: 900px) {
+      #battlefield { flex-direction: column; }
+      #vs-column { width: auto; }
+      #vs-text { writing-mode: horizontal-tb; }
+      #reveal-popup { width: min(92vw, 360px); }
+      .focus-unit { width: 150px; }
+    }
+
     @media (max-width: 520px) {
-      .robot-svg { width: 56px; height: 56px; }
+      #app { padding: 8px; }
+      .robot-svg { width: 70px; height: 70px; }
+      .focus-unit { width: 128px; padding: 10px; }
+      .focus-unit .robot-svg { width: 84px; height: 84px; }
+      .popup-parts,
       .parts-grid { grid-template-columns: 1fr; }
-      h1 { font-size: 1rem; }
+      #declaration-banner { padding: 14px 16px; letter-spacing: .08em; }
+      #damage-number { left: 66%; }
     }
   </style>
 </head>
@@ -454,281 +784,274 @@
 <div id="app">
   <h1>⚙ 3vs3 タクティカル・シミュレーター ⚙</h1>
 
-  <!-- ── TIMELINE ── -->
   <section id="timeline-section">
     <h2>▶ タイムライン</h2>
     <svg id="timeline-svg" viewBox="0 0 900 60" preserveAspectRatio="xMidYMid meet">
-      <!-- Track -->
-      <rect x="20" y="28" width="860" height="4" rx="2" fill="#1e3a5f"/>
-      <line x1="20" y1="10" x2="20" y2="50" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 2"/>
+      <rect x="20" y="28" width="860" height="4" rx="2" fill="#1e3a5f"></rect>
+      <line x1="20" y1="10" x2="20" y2="50" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 2"></line>
       <text x="6" y="14" fill="#94a3b8" font-size="9" font-family="sans-serif">BL</text>
-      <!-- Command Line marker -->
-      <line x1="880" y1="10" x2="880" y2="50" stroke="#fbbf24" stroke-width="2" stroke-dasharray="4 2"/>
+      <line x1="880" y1="10" x2="880" y2="50" stroke="#fbbf24" stroke-width="2" stroke-dasharray="4 2"></line>
       <text x="882" y="14" fill="#fbbf24" font-size="9" font-family="sans-serif">CL</text>
       <text x="56" y="16" fill="#64748b" font-size="9" font-family="sans-serif">CHG → ACT → CLR ↩</text>
-      <!-- Unit icons rendered by JS -->
       <g id="tl-icons"></g>
     </svg>
   </section>
 
-  <!-- ── BATTLEFIELD ── -->
-  <div id="battlefield">
-    <!-- Team A -->
-    <div class="team-panel team-a" id="panel-a">
-      <div class="team-title" id="name-a">チームA</div>
-      <!-- units injected by JS -->
+  <div id="battlefield-shell">
+    <div id="battlefield">
+      <div class="team-panel team-a" id="panel-a">
+        <div class="team-title" id="name-a">チームA</div>
+      </div>
+
+      <div id="vs-column"><span id="vs-text">VS</span></div>
+
+      <div class="team-panel team-b" id="panel-b">
+        <div class="team-title" id="name-b">チームB</div>
+      </div>
     </div>
 
-    <!-- VS column -->
-    <div id="vs-column">
-      <span id="vs-text">VS</span>
-    </div>
-
-    <!-- Team B -->
-    <div class="team-panel team-b" id="panel-b">
-      <div class="team-title" id="name-b">チームB</div>
-      <!-- units injected by JS -->
+    <div id="cinematic-layer" aria-live="polite">
+      <div id="cinematic-dimmer"></div>
+      <svg id="target-line-layer" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <defs>
+          <marker id="target-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24"></path>
+          </marker>
+        </defs>
+        <line id="target-line" marker-end="url(#target-arrow)" x1="26" y1="54" x2="74" y2="44"></line>
+      </svg>
+      <div class="focus-unit actor" id="focus-actor"></div>
+      <div class="focus-unit target" id="focus-target"></div>
+      <div id="declaration-banner"></div>
+      <div id="impact-flash"></div>
+      <div id="damage-number"></div>
+      <div id="reveal-popup"></div>
+      <div id="destroy-warning">PART DESTROYED!</div>
     </div>
   </div>
 
-  <!-- ── STATUS BANNER ── -->
   <div id="status-banner"></div>
 
-  <!-- ── EVENT LOG ── -->
   <section id="event-log">
     <h2>📜 バトルログ</h2>
     <div id="log-entries"></div>
   </section>
 
-  <!-- ── CONTROLS ── -->
   <div id="controls">
     <button class="btn btn-primary" id="btn-auto">▶ 自動進行 ON</button>
     <button class="btn btn-neutral" id="btn-step">⏭ 1ステップ</button>
-    <button class="btn btn-danger"  id="btn-reset">↺ リセット</button>
+    <button class="btn btn-danger" id="btn-reset">↺ リセット</button>
   </div>
 </div>
 
 <script>
-/* ====================================================================
-   BATTLE FIELD — JavaScript client
-   - Polls /api/battle/<id>/step/ to advance the battle
-   - Renders SVG robots and animates events
-==================================================================== */
+const SESSION_ID = {{ session_id }};
+const STEP_URL = `/api/battle/${SESSION_ID}/step/`;
+const NEW_URL = `/api/battle/new/`;
+const DEFAULT_TIMELINE_VIEWBOX = '0 0 900 60';
+const POLL_MS = 300;
+const PHASE_TIMINGS = {
+  selection: 380,
+  declaration: 780,
+  action: 520,
+  impact: 980,
+  destroy: 700,
+};
 
-const SESSION_ID   = {{ session_id }};
-const STEP_URL     = `/api/battle/${SESSION_ID}/step/`;
-const NEW_URL      = `/api/battle/new/`;
-
-// Initialise from server-rendered state
 let state = {{ initial_state|safe }};
 let autoPlay = false;
 let autoTimer = null;
-const POLL_MS = 800;   // ms between automatic steps
-
-// ── Colour helpers ──────────────────────────────────────────────────
+let stepping = false;
+let firstRender = true;
 
 const HP_COLORS = [
-  [.5,  '#22c55e'],   // >50% → green
-  [.25, '#facc15'],   // 25–50% → yellow
-  [0,   '#f87171'],   // <25% → red
+  [.5, '#22c55e'],
+  [.25, '#facc15'],
+  [0, '#f87171'],
 ];
 
 function hpColor(pct) {
-  for (const [thresh, col] of HP_COLORS) {
-    if (pct > thresh) return col;
+  for (const [threshold, color] of HP_COLORS) {
+    if (pct > threshold) return color;
   }
   return '#f87171';
 }
 
-// ── SVG robot builder ───────────────────────────────────────────────
-/**
- * Generates an inline SVG string for a stylised Medarot robot.
- * Part colours shift to grey when the part is destroyed.
- * @param {Object} unit  - unit data from state
- * @param {string} team  - "A" or "B"
- * @returns {string} SVG markup
- */
-function buildRobotSVG(unit, team) {
-  const p   = unit.parts;
-  const col = team === 'A' ? '#3b82f6' : '#ef4444';
-  const dim = '#334155';
-
-  const headCol = p.head.current_hp > 0 ? col : dim;
-  const raCol   = p.ra.current_hp   > 0 ? col : dim;
-  const laCol   = p.la.current_hp   > 0 ? col : dim;
-  const legCol  = p.leg.current_hp  > 0 ? col : dim;
-  const bodyCol = col;
-
-  // Destroyed parts get a cross-out class for the destroy animation trigger
-  const hC = p.head.current_hp <= 0 ? 'class="part-destroy"' : '';
-  const rC = p.ra.current_hp   <= 0 ? 'class="part-destroy"' : '';
-  const lC = p.la.current_hp   <= 0 ? 'class="part-destroy"' : '';
-  const lgC= p.leg.current_hp  <= 0 ? 'class="part-destroy"' : '';
-
-  return `
-  <svg class="robot-svg ${team === 'B' ? 'team-b' : ''}" id="robot-${unit.id}"
-       viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-    <!-- Leg -->
-    <g ${lgC}>
-      <rect x="25" y="62" width="12" height="14" rx="3" fill="${legCol}" opacity=".9"/>
-      <rect x="43" y="62" width="12" height="14" rx="3" fill="${legCol}" opacity=".9"/>
-    </g>
-    <!-- Body -->
-    <rect x="22" y="38" width="36" height="26" rx="5" fill="${bodyCol}" opacity=".85"/>
-    <!-- Core gem -->
-    <circle cx="40" cy="51" r="5" fill="rgba(255,255,255,.25)" stroke="${col}" stroke-width="1.5"/>
-    <!-- Left Arm -->
-    <g ${lC}>
-      <rect x="6" y="38" width="14" height="10" rx="3" fill="${laCol}" opacity=".9"/>
-      <rect x="4" y="45" width="10" height="14" rx="3" fill="${laCol}" opacity=".75"/>
-    </g>
-    <!-- Right Arm -->
-    <g ${rC}>
-      <rect x="60" y="38" width="14" height="10" rx="3" fill="${raCol}" opacity=".9"/>
-      <rect x="66" y="45" width="10" height="14" rx="3" fill="${raCol}" opacity=".75"/>
-    </g>
-    <!-- Head -->
-    <g ${hC}>
-      <rect x="28" y="18" width="24" height="22" rx="6" fill="${headCol}" opacity=".95"/>
-      <!-- Eyes -->
-      <circle cx="35" cy="28" r="3.5" fill="rgba(255,255,255,.9)"/>
-      <circle cx="45" cy="28" r="3.5" fill="rgba(255,255,255,.9)"/>
-      <circle cx="35" cy="28" r="2"   fill="${p.head.current_hp > 0 ? '#facc15' : '#334155'}"/>
-      <circle cx="45" cy="28" r="2"   fill="${p.head.current_hp > 0 ? '#facc15' : '#334155'}"/>
-    </g>
-    <!-- Incapacitated overlay -->
-    ${unit.incapacitated ? `
-      <line x1="10" y1="10" x2="70" y2="70" stroke="#f87171" stroke-width="3" opacity=".7"/>
-      <line x1="70" y1="10" x2="10" y2="70" stroke="#f87171" stroke-width="3" opacity=".7"/>
-    ` : ''}
-  </svg>`;
+function sleep(ms) {
+  return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
-// ── Unit card builder ───────────────────────────────────────────────
+function hasValue(value) {
+  return value !== null && value !== undefined;
+}
 
-function buildUnitCard(unit, team, leaderIndex, idx) {
-  const isLeader  = idx === leaderIndex;
-  const isCooling = unit.phase === 'CLR';
-  const isReady   = unit.phase === 'ACT';
-  const partOrder = [
-    {key: 'head', label: '頭部'},
-    {key: 'ra',   label: '右腕'},
-    {key: 'la',   label: '左腕'},
-    {key: 'leg',  label: '脚部'},
+function findUnitById(s, unitId) {
+  return [...s.team_a.units, ...s.team_b.units].find(unit => unit.id === unitId) || null;
+}
+
+function findUnitByName(s, name) {
+  return [...s.team_a.units, ...s.team_b.units].find(unit => unit.name === name) || null;
+}
+
+function teamForUnitId(s, unitId) {
+  return s.team_a.units.some(unit => unit.id === unitId) ? 'A' : 'B';
+}
+
+function getPartEntries(unit) {
+  return [
+    {key: 'head', label: '頭部', data: unit.parts.head},
+    {key: 'ra', label: '右腕', data: unit.parts.ra},
+    {key: 'la', label: '左腕', data: unit.parts.la},
+    {key: 'leg', label: '脚部', data: unit.parts.leg},
   ];
+}
 
-  const partsHTML = partOrder.map(({key, label}) => {
-    const p   = unit.parts[key];
-    const pct = p.max_hp > 0 ? Math.max(0, p.current_hp / p.max_hp) : 0;
-    return `
-    <div class="part-row" id="partrow-${unit.id}-${key}">
-      <div class="part-label">
-        <span>${label}</span>
-        <span>${p.current_hp}/${p.max_hp}</span>
-      </div>
-      <div class="hp-track">
-        <div class="hp-fill" id="hp-${unit.id}-${key}"
-             style="width:${pct*100}%;background-color:${hpColor(pct)}"></div>
-      </div>
-    </div>`;
-  }).join('');
+function buildRobotSVG(unit, team, extraClass = '') {
+  const parts = unit.parts;
+  const col = team === 'A' ? '#38bdf8' : '#fb7185';
+  const dim = '#475569';
+  const headCol = parts.head.current_hp > 0 ? col : dim;
+  const raCol = parts.ra.current_hp > 0 ? col : dim;
+  const laCol = parts.la.current_hp > 0 ? col : dim;
+  const legCol = parts.leg.current_hp > 0 ? col : dim;
+  const bodyCol = col;
+  const hC = parts.head.current_hp <= 0 ? 'class="part-destroy"' : '';
+  const rC = parts.ra.current_hp <= 0 ? 'class="part-destroy"' : '';
+  const lC = parts.la.current_hp <= 0 ? 'class="part-destroy"' : '';
+  const gC = parts.leg.current_hp <= 0 ? 'class="part-destroy"' : '';
 
-  const gaugePct = Math.min(100, unit.gauge / 10);
+  return `
+    <svg class="robot-svg ${team === 'B' ? 'team-b' : ''} ${extraClass}" id="robot-${unit.id}" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+      <g ${gC}>
+        <rect x="25" y="62" width="12" height="14" rx="3" fill="${legCol}" opacity=".92"></rect>
+        <rect x="43" y="62" width="12" height="14" rx="3" fill="${legCol}" opacity=".92"></rect>
+      </g>
+      <rect x="22" y="38" width="36" height="26" rx="5" fill="${bodyCol}" opacity=".88"></rect>
+      <circle cx="40" cy="51" r="5" fill="rgba(255,255,255,.18)" stroke="${col}" stroke-width="1.5"></circle>
+      <g ${lC}>
+        <rect x="6" y="38" width="14" height="10" rx="3" fill="${laCol}" opacity=".92"></rect>
+        <rect x="4" y="45" width="10" height="14" rx="3" fill="${laCol}" opacity=".76"></rect>
+      </g>
+      <g ${rC}>
+        <rect x="60" y="38" width="14" height="10" rx="3" fill="${raCol}" opacity=".92"></rect>
+        <rect x="66" y="45" width="10" height="14" rx="3" fill="${raCol}" opacity=".76"></rect>
+      </g>
+      <g ${hC}>
+        <rect x="28" y="18" width="24" height="22" rx="6" fill="${headCol}" opacity=".95"></rect>
+        <circle cx="35" cy="28" r="3.5" fill="rgba(255,255,255,.9)"></circle>
+        <circle cx="45" cy="28" r="3.5" fill="rgba(255,255,255,.9)"></circle>
+        <circle cx="35" cy="28" r="2" fill="${parts.head.current_hp > 0 ? '#facc15' : '#334155'}"></circle>
+        <circle cx="45" cy="28" r="2" fill="${parts.head.current_hp > 0 ? '#facc15' : '#334155'}"></circle>
+      </g>
+      ${unit.incapacitated ? `
+        <line x1="10" y1="10" x2="70" y2="70" stroke="#f87171" stroke-width="3" opacity=".72"></line>
+        <line x1="70" y1="10" x2="10" y2="70" stroke="#f87171" stroke-width="3" opacity=".72"></line>
+      ` : ''}
+    </svg>`;
+}
+
+function buildUnitCard(unit, team, leaderIndex, index) {
+  const isLeader = index === leaderIndex;
+  const isCooling = unit.phase === 'CLR';
+  const isReady = unit.phase === 'ACT';
   const phaseClass = isCooling ? 'is-cooling' : (isReady ? 'is-ready' : '');
   const phaseLabel = isCooling ? 'CLR ↩ 放熱' : (isReady ? 'ACT ⚡ 行動待機' : 'CHG → 充填');
-  const gaugeDir   = isCooling ? '← BASE' : '→ CMD';
+  const gaugeDir = isCooling ? '← BASE' : '→ CMD';
+  const gaugePct = Math.min(100, unit.gauge / 10);
+
+  const partsHTML = getPartEntries(unit).map(({key, label, data}) => {
+    const pct = data.max_hp > 0 ? Math.max(0, data.current_hp / data.max_hp) : 0;
+    return `
+      <div class="part-row ${data.current_hp <= 0 ? 'is-destroyed' : ''}" id="partrow-${unit.id}-${key}">
+        <div class="part-label">
+          <span>${label}</span>
+          <span id="hptext-${unit.id}-${key}">${data.current_hp}/${data.max_hp}</span>
+        </div>
+        <div class="hp-track">
+          <div class="hp-fill" id="hp-${unit.id}-${key}" style="width:${pct * 100}%;background-color:${hpColor(pct)}"></div>
+        </div>
+      </div>`;
+  }).join('');
 
   return `
-  <div class="unit-card ${isLeader ? 'is-leader' : ''} ${unit.incapacitated ? 'incapacitated' : ''} ${isCooling ? 'is-cooling' : ''}"
-       id="card-${unit.id}">
-    <div class="unit-name">${unit.name}</div>
-    <div class="phase-badge ${phaseClass}" id="phase-${unit.id}">${phaseLabel}</div>
-    ${buildRobotSVG(unit, team)}
-    <div class="gauge-row">
-      <span class="gauge-label">ゲージ</span>
-      <div class="gauge-track">
-        <span class="gauge-direction" id="gdir-${unit.id}">${gaugeDir}</span>
-        <div class="gauge-fill ${phaseClass}" id="gauge-${unit.id}"
-             style="width:${gaugePct}%"></div>
+    <div class="unit-card ${isLeader ? 'is-leader' : ''} ${unit.incapacitated ? 'incapacitated' : ''} ${isCooling ? 'is-cooling' : ''}" id="card-${unit.id}">
+      <div class="unit-name">${unit.name}</div>
+      <div class="phase-badge ${phaseClass}" id="phase-${unit.id}">${phaseLabel}</div>
+      <div class="robot-wrap">${buildRobotSVG(unit, team)}</div>
+      <div class="gauge-row">
+        <span class="gauge-label">ゲージ</span>
+        <div class="gauge-track">
+          <span class="gauge-direction" id="gdir-${unit.id}">${gaugeDir}</span>
+          <div class="gauge-fill ${phaseClass}" id="gauge-${unit.id}" style="width:${gaugePct}%"></div>
+        </div>
       </div>
-    </div>
-    <div class="parts-grid">${partsHTML}</div>
-  </div>`;
+      <div class="parts-seal">Damage capsule sealed</div>
+      <div class="parts-grid" id="parts-${unit.id}">${partsHTML}</div>
+    </div>`;
 }
-
-// ── Render both teams ───────────────────────────────────────────────
 
 function renderTeams(s) {
   const panelA = document.getElementById('panel-a');
   const panelB = document.getElementById('panel-b');
-
-  // Clear previous unit cards (keep the title div)
   [...panelA.querySelectorAll('.unit-card')].forEach(el => el.remove());
   [...panelB.querySelectorAll('.unit-card')].forEach(el => el.remove());
-
   document.getElementById('name-a').textContent = s.team_a.name;
   document.getElementById('name-b').textContent = s.team_b.name;
 
-  s.team_a.units.forEach((u, i) => {
-    panelA.insertAdjacentHTML('beforeend',
-      buildUnitCard(u, 'A', s.team_a.leader_index, i));
+  s.team_a.units.forEach((unit, index) => {
+    panelA.insertAdjacentHTML('beforeend', buildUnitCard(unit, 'A', s.team_a.leader_index, index));
   });
-  s.team_b.units.forEach((u, i) => {
-    panelB.insertAdjacentHTML('beforeend',
-      buildUnitCard(u, 'B', s.team_b.leader_index, i));
+  s.team_b.units.forEach((unit, index) => {
+    panelB.insertAdjacentHTML('beforeend', buildUnitCard(unit, 'B', s.team_b.leader_index, index));
   });
 }
 
-// ── Patch (update in-place) ─────────────────────────────────────────
-/**
- * Update HP bars, gauges, and incapacitation state without full re-render.
- * Triggers animations for acting / hit units.
- */
 function patchState(s) {
   const allUnits = [...s.team_a.units, ...s.team_b.units];
   allUnits.forEach(unit => {
     const isCooling = unit.phase === 'CLR';
     const isReady = unit.phase === 'ACT';
+    const gaugePct = Math.min(100, unit.gauge / 10);
+    const team = teamForUnitId(s, unit.id);
 
-    // Gauge
-    const gEl = document.getElementById(`gauge-${unit.id}`);
-    if (gEl) {
-      const pct = Math.min(100, unit.gauge / 10);
-      gEl.style.width = pct + '%';
-      gEl.classList.toggle('is-cooling', isCooling);
-      gEl.classList.toggle('is-ready', isReady);
+    const gauge = document.getElementById(`gauge-${unit.id}`);
+    if (gauge) {
+      gauge.style.width = `${gaugePct}%`;
+      gauge.classList.toggle('is-cooling', isCooling);
+      gauge.classList.toggle('is-ready', isReady);
     }
-    const gDir = document.getElementById(`gdir-${unit.id}`);
-    if (gDir) gDir.textContent = isCooling ? '← BASE' : '→ CMD';
 
-    // HP bars
-    ['head', 'ra', 'la', 'leg'].forEach(key => {
-      const hp = unit.parts[key];
+    const gaugeDir = document.getElementById(`gdir-${unit.id}`);
+    if (gaugeDir) gaugeDir.textContent = isCooling ? '← BASE' : '→ CMD';
+
+    const phase = document.getElementById(`phase-${unit.id}`);
+    if (phase) {
+      phase.textContent = isCooling ? 'CLR ↩ 放熱' : (isReady ? 'ACT ⚡ 行動待機' : 'CHG → 充填');
+      phase.classList.toggle('is-cooling', isCooling);
+      phase.classList.toggle('is-ready', isReady);
+    }
+
+    getPartEntries(unit).forEach(({key, data}) => {
+      const pct = data.max_hp > 0 ? Math.max(0, data.current_hp / data.max_hp) : 0;
       const fill = document.getElementById(`hp-${unit.id}-${key}`);
+      const text = document.getElementById(`hptext-${unit.id}-${key}`);
+      const row = document.getElementById(`partrow-${unit.id}-${key}`);
       if (fill) {
-        const pct = hp.max_hp > 0 ? Math.max(0, hp.current_hp / hp.max_hp) : 0;
-        fill.style.width = (pct * 100) + '%';
+        fill.style.width = `${pct * 100}%`;
         fill.style.backgroundColor = hpColor(pct);
       }
+      if (text) text.textContent = `${data.current_hp}/${data.max_hp}`;
+      if (row) row.classList.toggle('is-destroyed', data.current_hp <= 0 || data.disabled);
     });
 
-    // Incapacitation toggle
     const card = document.getElementById(`card-${unit.id}`);
     if (card) {
       card.classList.toggle('incapacitated', unit.incapacitated);
       card.classList.toggle('is-cooling', isCooling);
     }
-    const phaseEl = document.getElementById(`phase-${unit.id}`);
-    if (phaseEl) {
-      phaseEl.textContent = isCooling ? 'CLR ↩ 放熱' : (isReady ? 'ACT ⚡ 行動待機' : 'CHG → 充填');
-      phaseEl.classList.toggle('is-cooling', isCooling);
-      phaseEl.classList.toggle('is-ready', isReady);
-    }
 
-    // Update robot SVG (replace to reflect part destruction colours)
     const robotEl = document.getElementById(`robot-${unit.id}`);
     if (robotEl) {
-      const team = s.team_a.units.some(u => u.id === unit.id) ? 'A' : 'B';
       const tmp = document.createElement('div');
       tmp.innerHTML = buildRobotSVG(unit, team);
       robotEl.replaceWith(tmp.firstElementChild);
@@ -736,49 +1059,45 @@ function patchState(s) {
   });
 }
 
-// ── Timeline SVG ────────────────────────────────────────────────────
+const TL_COLORS_A = ['#38bdf8', '#7dd3fc', '#bae6fd'];
+const TL_COLORS_B = ['#fb7185', '#fda4af', '#fecdd3'];
 
-const TL_COLORS_A = ['#3b82f6', '#60a5fa', '#93c5fd'];
-const TL_COLORS_B = ['#ef4444', '#f87171', '#fca5a5'];
+function renderTimeline(s, viewBox = DEFAULT_TIMELINE_VIEWBOX) {
+  const svg = document.getElementById('timeline-svg');
+  svg.setAttribute('viewBox', viewBox);
 
-function renderTimeline(s) {
-  const g = document.getElementById('tl-icons');
-  g.innerHTML = '';
-
-  const TRACK_X0 = 20, TRACK_W = 860;
-  const ROW_A_Y = 20, ROW_B_Y = 45;
+  const group = document.getElementById('tl-icons');
+  group.innerHTML = '';
+  const TRACK_X0 = 20;
+  const TRACK_W = 860;
+  const ROW_A_Y = 20;
+  const ROW_B_Y = 45;
 
   function renderRow(units, baseY, colors) {
     const occupancy = new Map();
     [...units]
-      .map((u, i) => ({u, i, x: TRACK_X0 + (u.gauge / 1000) * TRACK_W}))
+      .map((unit, index) => ({unit, index, x: TRACK_X0 + (unit.gauge / 1000) * TRACK_W}))
       .sort((a, b) => a.x - b.x)
-      .forEach(({u, i, x}) => {
+      .forEach(({unit, index, x}) => {
         const bucket = Math.round(x / 18);
         const depth = occupancy.get(bucket) || 0;
         occupancy.set(bucket, depth + 1);
-
         const yOffset = depth * 10 * (baseY === ROW_A_Y ? -1 : 1);
-        const col = u.incapacitated ? '#334155' : colors[i];
-        const stroke = u.phase === 'CLR' ? '#cbd5e1' : '#fff';
-        const el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        el.setAttribute('transform', `translate(${x},${baseY + yOffset})`);
-
-        const coolingArrow = u.phase === 'CLR'
+        const col = unit.incapacitated ? '#334155' : colors[index];
+        const stroke = unit.phase === 'CLR' ? '#cbd5e1' : '#fff';
+        const svgGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        svgGroup.setAttribute('transform', `translate(${x},${baseY + yOffset})`);
+        const coolingArrow = unit.phase === 'CLR'
           ? '<text x="0" y="-11" text-anchor="middle" fill="#cbd5e1" font-size="8" font-family="sans-serif">↩</text>'
           : '';
-        const readyHalo = u.phase === 'ACT'
-          ? '<circle r="11" fill="none" stroke="#fbbf24" stroke-width="1.5" opacity=".65"/>' : '';
-
-        el.innerHTML = `
-          ${readyHalo}
-          <circle r="8" fill="${col}" stroke="${stroke}" stroke-width="1.5" opacity="${u.incapacitated ? .3 : (u.phase === 'CLR' ? .65 : 1)}"/>
-          ${coolingArrow}
-          <text x="0" y="4" text-anchor="middle" fill="#fff" font-size="7" font-family="sans-serif">${u.name[0]}</text>`;
-        if (!u.incapacitated && u.phase === 'ACT') {
-          el.querySelector('circle').style.animation = 'command-pulse .5s ease-in-out infinite';
+        const readyHalo = unit.phase === 'ACT'
+          ? '<circle r="11" fill="none" stroke="#fbbf24" stroke-width="1.5" opacity=".65"></circle>'
+          : '';
+        svgGroup.innerHTML = `${readyHalo}<circle r="8" fill="${col}" stroke="${stroke}" stroke-width="1.5" opacity="${unit.incapacitated ? .3 : (unit.phase === 'CLR' ? .65 : 1)}"></circle>${coolingArrow}<text x="0" y="4" text-anchor="middle" fill="#fff" font-size="7" font-family="sans-serif">${unit.name[0]}</text>`;
+        if (!unit.incapacitated && unit.phase === 'ACT') {
+          svgGroup.querySelector('circle').style.animation = 'command-pulse .5s ease-in-out infinite';
         }
-        g.appendChild(el);
+        group.appendChild(svgGroup);
       });
   }
 
@@ -786,20 +1105,17 @@ function renderTimeline(s) {
   renderRow(s.team_b.units, ROW_B_Y, TL_COLORS_B);
 }
 
-// ── Event log ────────────────────────────────────────────────────────
-
 function appendEvents(events) {
   const log = document.getElementById('log-entries');
   events.forEach(ev => {
     const actorClass = ev.actor_team === 'A' ? 'actor-a' : 'actor-b';
-    let   body       = '';
-
+    let body = '';
     if (ev.action === 'HEAL') {
       body = `<span class="heal">+${Math.abs(ev.damage).toFixed(0)} 回復</span> → ${ev.target_name}`;
     } else if (ev.action === 'COOLING') {
       body = ev.note || 'ベースラインへ帰還開始';
     } else if (ev.action === 'GUARD') {
-      body = `ガード！`;
+      body = 'ガード！';
     } else if (ev.action === 'SUPPORT') {
       body = `サポート → ${ev.target_name}`;
     } else if (ev.action === 'DOT') {
@@ -808,66 +1124,47 @@ function appendEvents(events) {
       body = `ミス！（${ev.target_name}）`;
     } else {
       body = `<span class="dmg">${ev.damage.toFixed(0)} ダメージ</span> → ${ev.target_name}`;
-      if (ev.note) {
-        body += ` ${ev.note}`;
-      }
-      if (ev.part_destroyed) {
-        body += ` <span class="destroy"> 🔥${ev.part_destroyed}</span>`;
-      }
+      if (ev.note) body += ` ${ev.note}`;
+      if (ev.part_destroyed) body += ` <span class="destroy">🔥${ev.part_destroyed}</span>`;
     }
 
     const entry = document.createElement('div');
     entry.className = 'event-entry';
-    entry.innerHTML =
-      `<span class="tick">[${ev.tick}]</span>` +
-      `<span class="${actorClass}">${ev.actor_name}</span>` +
-      ` [${ev.part_name}] ` + body;
+    entry.innerHTML = `<span class="tick">[${ev.tick}]</span><span class="${actorClass}">${ev.actor_name}</span> [${ev.part_name}] ${body}`;
     log.prepend(entry);
   });
 
-  // Keep log length manageable
   while (log.children.length > 60) log.removeChild(log.lastChild);
 }
 
-// ── Attack animation triggers ────────────────────────────────────────
-
-function triggerAttackAnimation(events, allUnits) {
+function triggerBaseCardAnimations(events, s) {
+  const allUnits = [...s.team_a.units, ...s.team_b.units];
   events.forEach(ev => {
-    if (!ev.hit && ev.action !== 'HEAL' && ev.action !== 'GUARD') return;
-
-    // Find actor robot SVG
-    const actorUnit = allUnits.find(u => u.name === ev.actor_name);
-    if (actorUnit) {
-      const robot = document.getElementById(`robot-${actorUnit.id}`);
-      if (robot) {
-        const isA = ev.actor_team === 'A';
-        const cls = isA ? 'dash-right' : 'dash-left';
-        robot.classList.add(cls);
-        robot.addEventListener('animationend', () => robot.classList.remove(cls), {once: true});
+    const actor = allUnits.find(unit => unit.name === ev.actor_name);
+    if (actor) {
+      const robot = document.getElementById(`robot-${actor.id}`);
+      const card = document.getElementById(`card-${actor.id}`);
+      if (robot && ['SHOOT', 'MELEE', 'HEAL', 'SUPPORT', 'GUARD'].includes(ev.action)) {
+        const cls = ev.actor_team === 'A' ? 'dash-right' : 'dash-left';
+        robot.style.animation = `${cls} .45s ease-out`;
+        robot.addEventListener('animationend', () => { robot.style.animation = ''; }, {once: true});
       }
-      // Card glow
-      const card = document.getElementById(`card-${actorUnit.id}`);
-      if (card) {
+      if (card && ['SHOOT', 'MELEE', 'HEAL', 'SUPPORT', 'GUARD'].includes(ev.action)) {
         card.classList.add('acting');
         card.addEventListener('animationend', () => card.classList.remove('acting'), {once: true});
       }
     }
 
-    // Shake target
     if (ev.target_name && ev.damage > 0) {
-      const targetUnit = allUnits.find(u => u.name === ev.target_name);
-      if (targetUnit) {
-        const card = document.getElementById(`card-${targetUnit.id}`);
-        if (card) {
-          card.classList.add('hit-shake');
-          card.addEventListener('animationend', () => card.classList.remove('hit-shake'), {once: true});
-        }
+      const target = allUnits.find(unit => unit.name === ev.target_name);
+      const card = target ? document.getElementById(`card-${target.id}`) : null;
+      if (card) {
+        card.classList.add('hit-shake');
+        card.addEventListener('animationend', () => card.classList.remove('hit-shake'), {once: true});
       }
     }
   });
 }
-
-// ── Status banner ────────────────────────────────────────────────────
 
 function updateBanner(s) {
   const banner = document.getElementById('status-banner');
@@ -889,11 +1186,7 @@ function updateBanner(s) {
   }
 }
 
-// ── Full render ──────────────────────────────────────────────────────
-
-let firstRender = true;
-
-function renderState(s, newEvents) {
+function renderState(s) {
   if (firstRender) {
     renderTeams(s);
     firstRender = false;
@@ -902,78 +1195,304 @@ function renderState(s, newEvents) {
   }
   renderTimeline(s);
   updateBanner(s);
-
-  if (newEvents && newEvents.length > 0) {
-    const allUnits = [...s.team_a.units, ...s.team_b.units];
-    triggerAttackAnimation(newEvents, allUnits);
-    appendEvents(newEvents);
-  }
 }
 
-// ── Step function ────────────────────────────────────────────────────
+function resetCardFocus() {
+  document.querySelectorAll('.unit-card').forEach(card => {
+    card.classList.remove('muted', 'focused', 'targeted');
+  });
+  document.querySelectorAll('.parts-grid').forEach(grid => grid.classList.remove('is-revealed'));
+}
 
-let stepping = false;
+function revealTargetCard(unitId) {
+  const grid = document.getElementById(`parts-${unitId}`);
+  if (grid) grid.classList.add('is-revealed');
+}
+
+function clearCinematic() {
+  document.body.classList.remove('cinematic-mode');
+  const layer = document.getElementById('cinematic-layer');
+  layer.className = '';
+  document.getElementById('focus-actor').innerHTML = '';
+  document.getElementById('focus-target').innerHTML = '';
+  document.getElementById('declaration-banner').textContent = '';
+  document.getElementById('impact-flash').classList.remove('active');
+  document.getElementById('damage-number').textContent = '';
+  document.getElementById('damage-number').classList.remove('show');
+  document.getElementById('reveal-popup').innerHTML = '';
+  document.getElementById('reveal-popup').classList.remove('active');
+  document.getElementById('destroy-warning').classList.remove('active');
+  resetCardFocus();
+  renderTimeline(state);
+}
+
+function setTimelineCamera(eventMeta, phaseName) {
+  const svg = document.getElementById('timeline-svg');
+  if (!eventMeta || !eventMeta.actor_id) {
+    svg.setAttribute('viewBox', DEFAULT_TIMELINE_VIEWBOX);
+    return;
+  }
+
+  const actor = findUnitById(state, eventMeta.actor_id);
+  const target = eventMeta.target_id ? findUnitById(state, eventMeta.target_id) : null;
+  const actorX = 20 + ((actor ? actor.gauge : 0) / 1000) * 860;
+  const targetX = 20 + ((target ? target.gauge : actor ? actor.gauge : 0) / 1000) * 860;
+
+  if (phaseName === 'selection') {
+    const x = Math.max(0, actorX - 120);
+    svg.setAttribute('viewBox', `${x.toFixed(1)} 0 240 60`);
+    return;
+  }
+
+  if ((phaseName === 'action' || phaseName === 'impact') && target) {
+    const minX = Math.max(0, Math.min(actorX, targetX) - 80);
+    const width = Math.min(900, Math.max(260, Math.abs(targetX - actorX) + 160));
+    svg.setAttribute('viewBox', `${minX.toFixed(1)} 0 ${width.toFixed(1)} 60`);
+    return;
+  }
+
+  svg.setAttribute('viewBox', DEFAULT_TIMELINE_VIEWBOX);
+}
+
+function skillBannerText(eventMeta) {
+  const actionLabel = {
+    SHOOT: 'シュート',
+    MELEE: 'なぐる',
+    HEAL: 'かいふく',
+    SUPPORT: 'サポート',
+    GUARD: 'ガード',
+    DOT: 'ついげき',
+  }[eventMeta.action] || eventMeta.action;
+  return `${eventMeta.actor_name} ${eventMeta.part_name} ${actionLabel}`;
+}
+
+function renderFocusUnit(unit, team, roleLabel) {
+  return `
+    <div class="focus-label">${roleLabel}</div>
+    <div class="focus-name">${unit.name}</div>
+    ${buildRobotSVG(unit, team, 'cinematic-proxy')}`;
+}
+
+function buildRevealPopup(unit, eventMeta) {
+  const impactedKey = eventMeta.target_part_key;
+  const impactedBefore = eventMeta.hp_before;
+  const impactedAfter = eventMeta.hp_after;
+  const entries = getPartEntries(unit).map(({key, label, data}) => {
+    const beforeValue = key === impactedKey && hasValue(impactedBefore) ? impactedBefore : data.current_hp;
+    const afterValue = key === impactedKey && hasValue(impactedAfter) ? impactedAfter : data.current_hp;
+    const beforePct = data.max_hp > 0 ? Math.max(0, beforeValue / data.max_hp) : 0;
+    const afterPct = data.max_hp > 0 ? Math.max(0, afterValue / data.max_hp) : 0;
+    return `
+      <div class="popup-part ${key === impactedKey ? 'highlight' : ''} ${(afterValue <= 0 || data.disabled) ? 'destroyed' : ''}" id="popup-part-${key}">
+        <div class="part-label"><span>${label}</span><span id="popup-hptext-${key}">${afterValue}/${data.max_hp}</span></div>
+        <div class="hp-track">
+          <div class="hp-fill" id="popup-hp-${key}" data-before="${beforePct * 100}" data-after="${afterPct * 100}" style="width:${beforePct * 100}%;background-color:${hpColor(afterPct)}"></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="popup-title">Impact & Reveal</div>
+    <div class="popup-name">${unit.name}</div>
+    <div class="popup-parts">${entries}</div>`;
+}
+
+function primeCinematicUnits(eventMeta) {
+  const actor = findUnitById(state, eventMeta.actor_id) || findUnitByName(state, eventMeta.actor_name);
+  const target = eventMeta.target_id ? findUnitById(state, eventMeta.target_id) : findUnitByName(state, eventMeta.target_name);
+  const actorTeam = actor ? teamForUnitId(state, actor.id) : eventMeta.actor_team;
+
+  document.getElementById('focus-actor').innerHTML = actor ? renderFocusUnit(actor, actorTeam, 'Attacker') : '';
+  document.getElementById('focus-target').innerHTML = target ? renderFocusUnit(target, target ? teamForUnitId(state, target.id) : eventMeta.target_team, 'Target') : '';
+  document.getElementById('declaration-banner').textContent = skillBannerText(eventMeta);
+
+  const targetLine = document.getElementById('target-line');
+  if (actorTeam === 'A') {
+    targetLine.setAttribute('x1', '30');
+    targetLine.setAttribute('y1', '56');
+    targetLine.setAttribute('x2', '71');
+    targetLine.setAttribute('y2', '44');
+  } else {
+    targetLine.setAttribute('x1', '70');
+    targetLine.setAttribute('y1', '56');
+    targetLine.setAttribute('x2', '29');
+    targetLine.setAttribute('y2', '44');
+  }
+
+  return {actor, target, actorTeam};
+}
+
+function animateRevealBars(eventMeta) {
+  if (!eventMeta.target_part_key) return;
+  const fill = document.getElementById(`popup-hp-${eventMeta.target_part_key}`);
+  const text = document.getElementById(`popup-hptext-${eventMeta.target_part_key}`);
+  if (!fill) return;
+  const beforePct = Number(fill.dataset.before || 0);
+  const afterPct = Number(fill.dataset.after || 0);
+  fill.style.width = `${beforePct}%`;
+  window.setTimeout(() => {
+    fill.style.width = `${afterPct}%`;
+    fill.style.backgroundColor = hpColor(afterPct / 100);
+    if (text && hasValue(eventMeta.hp_after) && hasValue(eventMeta.hp_max)) {
+      text.textContent = `${eventMeta.hp_after}/${eventMeta.hp_max}`;
+    }
+  }, 80);
+}
+
+function isDramaticEvent(eventMeta) {
+  return !!eventMeta && ['SHOOT', 'MELEE', 'HEAL', 'SUPPORT', 'GUARD', 'DOT'].includes(eventMeta.action);
+}
+
+async function playEventSequence(eventMeta) {
+  if (!isDramaticEvent(eventMeta)) return;
+
+  const {actor, target, actorTeam} = primeCinematicUnits(eventMeta);
+  if (!actor) return;
+
+  document.body.classList.add('cinematic-mode');
+  const layer = document.getElementById('cinematic-layer');
+  layer.className = 'active phase-selection';
+  resetCardFocus();
+  document.querySelectorAll('.unit-card').forEach(card => card.classList.add('muted'));
+
+  const actorCard = document.getElementById(`card-${actor.id}`);
+  if (actorCard) {
+    actorCard.classList.remove('muted');
+    actorCard.classList.add('focused');
+  }
+  if (target) {
+    const targetCard = document.getElementById(`card-${target.id}`);
+    if (targetCard) {
+      targetCard.classList.remove('muted');
+      targetCard.classList.add('targeted');
+    }
+  }
+
+  setTimelineCamera(eventMeta, 'selection');
+  await sleep(PHASE_TIMINGS.selection);
+
+  layer.className = 'active phase-declaration';
+  await sleep(PHASE_TIMINGS.declaration);
+
+  layer.className = 'active phase-action';
+  setTimelineCamera(eventMeta, 'action');
+  const focusActor = document.getElementById('focus-actor');
+  focusActor.classList.add(actorTeam === 'A' ? 'dash-right' : 'dash-left');
+  await sleep(PHASE_TIMINGS.action - 120);
+
+  document.getElementById('impact-flash').classList.remove('active');
+  // Force a reflow so the flash animation reliably restarts for each action.
+  void document.getElementById('impact-flash').offsetWidth;
+  document.getElementById('impact-flash').classList.add('active');
+  if (target) {
+    const card = document.getElementById(`card-${target.id}`);
+    if (card) {
+      card.classList.add('hit-shake');
+      card.addEventListener('animationend', () => card.classList.remove('hit-shake'), {once: true});
+    }
+  }
+
+  await sleep(120);
+  layer.className = 'active phase-impact';
+  setTimelineCamera(eventMeta, 'impact');
+
+  if (target && eventMeta.show_parts_reveal) {
+    const popup = document.getElementById('reveal-popup');
+    popup.innerHTML = buildRevealPopup(target, eventMeta);
+    popup.classList.add('active');
+    revealTargetCard(target.id);
+    animateRevealBars(eventMeta);
+  }
+
+  const damageNumber = document.getElementById('damage-number');
+  if (eventMeta.action === 'HEAL') {
+    damageNumber.textContent = `+${Math.abs(eventMeta.damage).toFixed(0)}`;
+    damageNumber.style.color = 'var(--green)';
+  } else if (!eventMeta.hit) {
+    damageNumber.textContent = 'MISS';
+    damageNumber.style.color = 'var(--gold)';
+  } else {
+    damageNumber.textContent = `-${Math.max(0, Number(eventMeta.damage || 0)).toFixed(0)}`;
+    damageNumber.style.color = 'var(--red)';
+  }
+  damageNumber.classList.remove('show');
+  // Force a reflow so the damage pop animation restarts with the new value.
+  void damageNumber.offsetWidth;
+  damageNumber.classList.add('show');
+
+  await sleep(PHASE_TIMINGS.impact);
+
+  if (eventMeta.part_destroyed) {
+    document.getElementById('destroy-warning').classList.add('active');
+    await sleep(PHASE_TIMINGS.destroy);
+  }
+
+  focusActor.classList.remove('dash-right', 'dash-left');
+  clearCinematic();
+}
 
 async function doStep() {
   if (stepping || state.is_finished) return;
   stepping = true;
   try {
-    const resp  = await fetch(STEP_URL);
-    const data  = await resp.json();
+    const response = await fetch(STEP_URL);
+    const data = await response.json();
     state = data;
-    renderState(state, data.new_events || []);
-  } catch (e) {
-    console.error('Step failed:', e);
+    renderState(state);
+    const primaryEvent = (data.event_stack || []).find(isDramaticEvent);
+    if (primaryEvent) {
+      await playEventSequence(primaryEvent);
+    }
+    triggerBaseCardAnimations(data.new_events || [], state);
+    appendEvents(data.new_events || []);
+  } catch (error) {
+    console.error('Step failed:', error);
   } finally {
     stepping = false;
   }
 }
 
-// ── Auto play ────────────────────────────────────────────────────────
+async function autoTick() {
+  if (!autoPlay || state.is_finished) return;
+  await doStep();
+  if (autoPlay && !state.is_finished) {
+    autoTimer = window.setTimeout(autoTick, POLL_MS);
+  }
+}
 
 function startAuto() {
-  if (autoTimer) return;
+  if (autoPlay) return;
   autoPlay = true;
   document.getElementById('btn-auto').textContent = '⏸ 自動進行 OFF';
-  autoTimer = setInterval(async () => {
-    if (state.is_finished) { stopAuto(); return; }
-    await doStep();
-  }, POLL_MS);
+  autoTick();
 }
 
 function stopAuto() {
   autoPlay = false;
-  clearInterval(autoTimer);
+  if (autoTimer) window.clearTimeout(autoTimer);
   autoTimer = null;
   document.getElementById('btn-auto').textContent = '▶ 自動進行 ON';
 }
 
-// ── Reset ────────────────────────────────────────────────────────────
-
 async function doReset() {
   stopAuto();
-  firstRender = true;
   try {
-    const resp = await fetch(NEW_URL, {method: 'POST'});
-    const data = await resp.json();
-    // Reload the page pointing at the new session
+    const response = await fetch(NEW_URL, {method: 'POST'});
+    const data = await response.json();
     window.location.href = `/?session=${data.session_id}`;
-  } catch (e) {
+  } catch (error) {
     window.location.reload();
   }
 }
 
-// ── Button wiring ────────────────────────────────────────────────────
-
 document.getElementById('btn-auto').addEventListener('click', () => {
   if (autoPlay) stopAuto(); else startAuto();
 });
-
 document.getElementById('btn-step').addEventListener('click', doStep);
 document.getElementById('btn-reset').addEventListener('click', doReset);
 
-// ── Initial render ───────────────────────────────────────────────────
-renderState(state, state.events || []);
+renderState(state);
+if (state.events && state.events.length) appendEvents(state.events);
 </script>
 </body>
 </html>

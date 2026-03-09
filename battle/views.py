@@ -236,9 +236,112 @@ def _state_to_dict(state: BattleState) -> dict[str, Any]:
         "team_a": team_dict(state.team_a),
         "team_b": team_dict(state.team_b),
         "events": events,
+        "event_stack": [],
         "is_finished": state.is_finished,
         "winner": state.winner,
     }
+
+
+def _iter_units(state: BattleState) -> list[tuple[str, Any]]:
+    """Return every unit in the state alongside its team label."""
+    units: list[tuple[str, Any]] = []
+    for team_label, team in (("A", state.team_a), ("B", state.team_b)):
+        for unit in team.units:
+            units.append((team_label, unit))
+    return units
+
+
+def _find_unit_context(state: BattleState, unit_name: str | None) -> dict[str, Any] | None:
+    """Resolve a unit name to team/unit metadata for animation serialisation."""
+    if not unit_name:
+        return None
+    for team_label, unit in _iter_units(state):
+        if unit.name == unit_name:
+            return {
+                "team": team_label,
+                "id": unit.medarot_id,
+                "name": unit.name,
+                "unit": unit,
+            }
+    return None
+
+
+def _find_part_context(unit: Any | None, part_name: str | None) -> tuple[str | None, Any | None]:
+    """Resolve an event part name back to a part slot on the unit."""
+    if unit is None or not part_name:
+        return None, None
+    for key in ("head", "ra", "la", "leg"):
+        part = getattr(unit, f"part_{key}")
+        if part.name == part_name:
+            return key, part
+    return None, None
+
+
+def _target_part_key_for_event(action: str) -> str | None:
+    """Map an engine action to the affected target part slot in the current ruleset."""
+    return "head" if action in {"SHOOT", "MELEE", "HEAL", "DOT"} else None
+
+
+def _build_event_stack(
+    previous_state: BattleState,
+    updated_state: BattleState,
+    events: list[dict[str, Any]] | list[Any],
+) -> list[dict[str, Any]]:
+    """Build UI-facing cinematic metadata from raw engine events."""
+    stack: list[dict[str, Any]] = []
+
+    for raw_event in events:
+        event = raw_event if isinstance(raw_event, dict) else raw_event.model_dump()
+        actor_before = _find_unit_context(previous_state, event.get("actor_name"))
+        actor_after = _find_unit_context(updated_state, event.get("actor_name"))
+        target_before = _find_unit_context(previous_state, event.get("target_name"))
+        target_after = _find_unit_context(updated_state, event.get("target_name"))
+        actor_ctx = actor_after or actor_before
+        target_ctx = target_after or target_before
+        actor_part_key = actor_part_system = None
+        event_part_name = event.get("part_name")
+        if actor_ctx:
+            actor_part_key, actor_part = _find_part_context(actor_ctx["unit"], event_part_name)
+            actor_part_system = actor_part.system.value if actor_part else None
+        else:
+            actor_part = None
+
+        target_part_key = _target_part_key_for_event(event.get("action", ""))
+        target_part_system = target_part_name = None
+        hp_before = hp_after = hp_max = None
+        if target_ctx and target_part_key:
+            previous_part = getattr(target_before["unit"], f"part_{target_part_key}", None) if target_before else None
+            updated_part = getattr(target_after["unit"], f"part_{target_part_key}", None) if target_after else None
+            reference_part = updated_part or previous_part
+            if reference_part is not None:
+                target_part_system = reference_part.system.value
+                target_part_name = reference_part.name
+                hp_max = reference_part.attr.armor
+            if previous_part is not None:
+                hp_before = previous_part.attr.current_hp
+            if updated_part is not None:
+                hp_after = updated_part.attr.current_hp
+
+        stack.append(
+            {
+                **event,
+                "actor_id": actor_ctx["id"] if actor_ctx else None,
+                "actor_team": actor_ctx["team"] if actor_ctx else event.get("actor_team"),
+                "actor_part_key": actor_part_key,
+                "actor_part_system": actor_part_system,
+                "target_id": target_ctx["id"] if target_ctx else None,
+                "target_team": target_ctx["team"] if target_ctx else None,
+                "target_part_key": target_part_key,
+                "target_part_system": target_part_system,
+                "target_part_name": target_part_name,
+                "hp_before": hp_before,
+                "hp_after": hp_after,
+                "hp_max": hp_max,
+                "show_parts_reveal": bool(target_ctx and target_part_key and hp_after is not None),
+                "camera_mode": "duel" if target_ctx else "timeline",
+            }
+        )
+    return stack
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +384,7 @@ def battle_step(request: HttpRequest, session_id: int) -> JsonResponse:
         state = state_from_json(session.state_json)
         return JsonResponse({**_state_to_dict(state), "already_finished": True})
 
+    previous_state = state_from_json(session.state_json)
     state = state_from_json(session.state_json)
     engine = BattleEngine(state)
     updated_state, new_events = engine.advance()
@@ -294,6 +398,7 @@ def battle_step(request: HttpRequest, session_id: int) -> JsonResponse:
 
     response_data = _state_to_dict(updated_state)
     response_data["new_events"] = [e.model_dump() for e in new_events]
+    response_data["event_stack"] = _build_event_stack(previous_state, updated_state, new_events)
     return JsonResponse(response_data)
 
 

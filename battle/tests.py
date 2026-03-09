@@ -18,6 +18,7 @@ from django.test import TestCase, Client
 from .services.engine_logic import (
     AttributeState,
     BattleEngine,
+    BattleEvent,
     BattleState,
     MedarotState,
     PartState,
@@ -34,7 +35,7 @@ from .services.engine_logic import (
     state_from_json,
     state_to_json,
 )
-from .views import _state_to_dict
+from .views import _build_event_stack, _state_to_dict
 from .models import (
     Attribute,
     BattleSession,
@@ -511,6 +512,8 @@ class APIViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.content)
         self.assertGreater(data["tick"], 0)
+        self.assertIn("event_stack", data)
+        self.assertGreater(len(data["event_stack"]), 0)
 
     def test_battle_state_endpoint(self) -> None:
         resp = self.client.post("/api/battle/new/")
@@ -597,3 +600,45 @@ class ViewSerialisationTests(TestCase):
 
         self.assertEqual(data["team_a"]["units"][0]["phase"], "CLR")
         self.assertTrue(data["team_a"]["units"][0]["is_cooling"])
+
+    def test_build_event_stack_includes_cinematic_metadata(self) -> None:
+        actor_before = _make_unit("Actor", medarot_id=11)
+        actor_after = _make_unit("Actor", medarot_id=11)
+        target_before = _make_unit("Target", medarot_id=21)
+        target_after = _make_unit("Target", medarot_id=21)
+        target_before.part_head.attr.current_hp = 100
+        target_after.part_head.attr.current_hp = 64
+
+        previous_state = _make_battle(
+            _make_team("TeamA", 1, units=[actor_before, _make_unit("A2"), _make_unit("A3")]),
+            _make_team("TeamB", 2, units=[target_before, _make_unit("B2"), _make_unit("B3")]),
+        )
+        updated_state = _make_battle(
+            _make_team("TeamA", 1, units=[actor_after, _make_unit("A2"), _make_unit("A3")]),
+            _make_team("TeamB", 2, units=[target_after, _make_unit("B2"), _make_unit("B3")]),
+        )
+        stack = _build_event_stack(
+            previous_state,
+            updated_state,
+            [
+                BattleEvent(
+                    tick=5,
+                    actor_team="A",
+                    actor_name="Actor",
+                    part_name=actor_after.part_head.name,
+                    target_name="Target",
+                    action="SHOOT",
+                    damage=36,
+                    hit=True,
+                    note="impact",
+                )
+            ],
+        )
+
+        self.assertEqual(len(stack), 1)
+        self.assertEqual(stack[0]["actor_id"], 11)
+        self.assertEqual(stack[0]["target_id"], 21)
+        self.assertEqual(stack[0]["target_part_key"], "head")
+        self.assertEqual(stack[0]["hp_before"], 100)
+        self.assertEqual(stack[0]["hp_after"], 64)
+        self.assertTrue(stack[0]["show_parts_reveal"])
