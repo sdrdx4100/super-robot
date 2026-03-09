@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3vs3 メダロット風タクティカル・シミュレーター</title>
+  <style>
+    /* ================================================================
+       GLOBAL RESET & THEME
+    ================================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-dark:   #0a0e1a;
+      --bg-panel:  #111827;
+      --border:    #1e3a5f;
+      --accent-a:  #3b82f6;   /* Team A blue */
+      --accent-b:  #ef4444;   /* Team B red  */
+      --gold:      #fbbf24;
+      --text:      #e2e8f0;
+      --text-dim:  #64748b;
+      --green:     #22c55e;
+      --yellow:    #facc15;
+      --red:       #f87171;
+      --orange:    #fb923c;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg-dark);
+      color: var(--text);
+      font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+      font-size: 14px;
+      overflow-x: hidden;
+    }
+
+    /* ================================================================
+       LAYOUT
+    ================================================================ */
+    #app {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: 12px;
+      gap: 10px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.3rem;
+      letter-spacing: .1em;
+      color: var(--gold);
+      text-shadow: 0 0 12px rgba(251,191,36,.4);
+    }
+
+    /* ================================================================
+       TIMELINE SECTION
+    ================================================================ */
+    #timeline-section {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+
+    #timeline-section h2 {
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+
+    #timeline-svg {
+      width: 100%;
+      height: 60px;
+      display: block;
+    }
+
+    /* ================================================================
+       BATTLEFIELD
+    ================================================================ */
+    #battlefield {
+      display: flex;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .team-panel {
+      flex: 1;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .team-panel.team-a { border-color: var(--accent-a); }
+    .team-panel.team-b { border-color: var(--accent-b); }
+
+    .team-title {
+      font-size: .85rem;
+      font-weight: 700;
+      text-align: center;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .team-a .team-title { color: var(--accent-a); }
+    .team-b .team-title { color: var(--accent-b); }
+
+    /* ================================================================
+       UNIT CARD
+    ================================================================ */
+    .unit-card {
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+      position: relative;
+      transition: border-color .3s;
+    }
+
+    .unit-card.is-leader::before {
+      content: "★";
+      position: absolute;
+      top: 4px; right: 6px;
+      color: var(--gold);
+      font-size: .85rem;
+    }
+
+    .unit-card.incapacitated {
+      opacity: .4;
+      filter: grayscale(1);
+    }
+
+    .unit-card.acting {
+      border-color: var(--gold) !important;
+      animation: card-glow 0.6s ease-out;
+    }
+
+    .unit-card.hit-shake {
+      animation: damage-shake 0.4s ease-out;
+    }
+
+    .unit-name {
+      font-weight: 700;
+      font-size: .9rem;
+      margin-bottom: 6px;
+    }
+
+    /* ================================================================
+       SVG ROBOT
+    ================================================================ */
+    .robot-svg {
+      display: block;
+      margin: 0 auto 6px;
+      width: 80px;
+      height: 80px;
+      overflow: visible;
+    }
+
+    .robot-svg.team-b { transform: scaleX(-1); }
+
+    /* Part flash for destruction */
+    .part-destroy {
+      animation: destroy 1s ease-out forwards;
+    }
+
+    /* ================================================================
+       GAUGE BAR (timeline position)
+    ================================================================ */
+    .gauge-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .gauge-label {
+      font-size: .65rem;
+      color: var(--text-dim);
+      width: 30px;
+      flex-shrink: 0;
+    }
+
+    .gauge-track {
+      flex: 1;
+      height: 6px;
+      background: rgba(255,255,255,.08);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .gauge-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent-a), var(--gold));
+      transition: width .2s;
+    }
+
+    .team-b .gauge-fill {
+      background: linear-gradient(90deg, var(--accent-b), var(--orange));
+    }
+
+    /* ================================================================
+       PART HP BARS
+    ================================================================ */
+    .parts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+    }
+
+    .part-row {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .part-label {
+      font-size: .6rem;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .hp-track {
+      height: 5px;
+      background: rgba(255,255,255,.06);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .hp-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width .4s, background-color .4s;
+    }
+
+    /* ================================================================
+       CENTER DIVIDER
+    ================================================================ */
+    #vs-column {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      flex-shrink: 0;
+    }
+
+    #vs-text {
+      font-size: 1.4rem;
+      font-weight: 900;
+      color: var(--gold);
+      writing-mode: vertical-rl;
+      text-shadow: 0 0 10px rgba(251,191,36,.6);
+      letter-spacing: .2em;
+    }
+
+    /* ================================================================
+       EVENT LOG
+    ================================================================ */
+    #event-log {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+
+    #event-log h2 {
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+
+    .event-entry {
+      font-size: .78rem;
+      padding: 2px 0;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+      line-height: 1.4;
+    }
+
+    .event-entry .tick { color: var(--text-dim); margin-right: 6px; }
+    .event-entry .actor-a { color: var(--accent-a); font-weight: 600; }
+    .event-entry .actor-b { color: var(--accent-b); font-weight: 600; }
+    .event-entry .dmg { color: var(--red); font-weight: 700; }
+    .event-entry .heal { color: var(--green); font-weight: 700; }
+    .event-entry .destroy { color: var(--orange); font-weight: 700; }
+
+    /* ================================================================
+       CONTROLS
+    ================================================================ */
+    #controls {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 8px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: .85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: filter .2s, transform .1s;
+    }
+
+    .btn:hover { filter: brightness(1.2); }
+    .btn:active { transform: scale(.96); }
+
+    .btn-primary { background: var(--accent-a); color: #fff; }
+    .btn-danger  { background: var(--accent-b); color: #fff; }
+    .btn-neutral { background: #334155; color: var(--text); }
+
+    /* ================================================================
+       STATUS BANNER
+    ================================================================ */
+    #status-banner {
+      text-align: center;
+      font-size: 1.1rem;
+      font-weight: 700;
+      min-height: 28px;
+      color: var(--gold);
+    }
+
+    #status-banner.win-a { color: var(--accent-a); }
+    #status-banner.win-b { color: var(--accent-b); }
+
+    /* ================================================================
+       CSS ANIMATIONS
+    ================================================================ */
+
+    /* Unit dashes forward when acting */
+    @keyframes dash-right {
+      0%   { transform: translateX(0); }
+      40%  { transform: translateX(30px); }
+      70%  { transform: translateX(30px); }
+      100% { transform: translateX(0); }
+    }
+
+    @keyframes dash-left {
+      0%   { transform: translateX(0); }
+      40%  { transform: translateX(-30px); }
+      70%  { transform: translateX(-30px); }
+      100% { transform: translateX(0); }
+    }
+
+    @keyframes card-glow {
+      0%   { box-shadow: 0 0 0 2px var(--gold); }
+      50%  { box-shadow: 0 0 16px 4px var(--gold); }
+      100% { box-shadow: none; }
+    }
+
+    /* Target shakes on hit */
+    @keyframes damage-shake {
+      0%,100% { transform: translateX(0); }
+      15%     { transform: translateX(-8px) rotate(-2deg); }
+      30%     { transform: translateX(8px)  rotate(2deg);  }
+      45%     { transform: translateX(-6px) rotate(-1deg); }
+      60%     { transform: translateX(6px)  rotate(1deg);  }
+      75%     { transform: translateX(-3px); }
+    }
+
+    /* Part shatters and fades on destruction */
+    @keyframes destroy {
+      0%   { opacity: 1;   transform: scale(1)    rotate(0deg); }
+      30%  { opacity: .9;  transform: scale(1.15) rotate(-5deg); }
+      60%  { opacity: .4;  transform: scale(.8)   rotate(10deg); }
+      100% { opacity: 0;   transform: scale(.3)   rotate(-20deg); }
+    }
+
+    /* Timeline icons pulse when at command line */
+    @keyframes command-pulse {
+      0%, 100% { r: 8; }
+      50%       { r: 11; filter: drop-shadow(0 0 6px currentColor); }
+    }
+
+    /* "Miss" flash */
+    @keyframes miss-flash {
+      0%   { opacity: 1; }
+      50%  { opacity: .2; }
+      100% { opacity: 1; }
+    }
+
+    .robot-svg.dash-right { animation: dash-right .5s ease-in-out; }
+    .robot-svg.dash-left  { animation: dash-left  .5s ease-in-out; }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @media (max-width: 520px) {
+      .robot-svg { width: 56px; height: 56px; }
+      .parts-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <h1>⚙ 3vs3 タクティカル・シミュレーター ⚙</h1>
+
+  <!-- ── TIMELINE ── -->
+  <section id="timeline-section">
+    <h2>▶ タイムライン</h2>
+    <svg id="timeline-svg" viewBox="0 0 900 60" preserveAspectRatio="xMidYMid meet">
+      <!-- Track -->
+      <rect x="20" y="28" width="860" height="4" rx="2" fill="#1e3a5f"/>
+      <!-- Command Line marker -->
+      <line x1="880" y1="10" x2="880" y2="50" stroke="#fbbf24" stroke-width="2" stroke-dasharray="4 2"/>
+      <text x="882" y="14" fill="#fbbf24" font-size="9" font-family="sans-serif">CL</text>
+      <!-- Unit icons rendered by JS -->
+      <g id="tl-icons"></g>
+    </svg>
+  </section>
+
+  <!-- ── BATTLEFIELD ── -->
+  <div id="battlefield">
+    <!-- Team A -->
+    <div class="team-panel team-a" id="panel-a">
+      <div class="team-title" id="name-a">チームA</div>
+      <!-- units injected by JS -->
+    </div>
+
+    <!-- VS column -->
+    <div id="vs-column">
+      <span id="vs-text">VS</span>
+    </div>
+
+    <!-- Team B -->
+    <div class="team-panel team-b" id="panel-b">
+      <div class="team-title" id="name-b">チームB</div>
+      <!-- units injected by JS -->
+    </div>
+  </div>
+
+  <!-- ── STATUS BANNER ── -->
+  <div id="status-banner"></div>
+
+  <!-- ── EVENT LOG ── -->
+  <section id="event-log">
+    <h2>📜 バトルログ</h2>
+    <div id="log-entries"></div>
+  </section>
+
+  <!-- ── CONTROLS ── -->
+  <div id="controls">
+    <button class="btn btn-primary" id="btn-auto">▶ 自動進行 ON</button>
+    <button class="btn btn-neutral" id="btn-step">⏭ 1ステップ</button>
+    <button class="btn btn-danger"  id="btn-reset">↺ リセット</button>
+  </div>
+</div>
+
+<script>
+/* ====================================================================
+   BATTLE FIELD — JavaScript client
+   - Polls /api/battle/<id>/step/ to advance the battle
+   - Renders SVG robots and animates events
+==================================================================== */
+
+const SESSION_ID   = {{ session_id }};
+const STEP_URL     = `/api/battle/${SESSION_ID}/step/`;
+const NEW_URL      = `/api/battle/new/`;
+
+// Initialise from server-rendered state
+let state = {{ initial_state|safe }};
+let autoPlay = false;
+let autoTimer = null;
+const POLL_MS = 800;   // ms between automatic steps
+
+// ── Colour helpers ──────────────────────────────────────────────────
+
+const HP_COLORS = [
+  [.5,  '#22c55e'],   // >50% → green
+  [.25, '#facc15'],   // 25–50% → yellow
+  [0,   '#f87171'],   // <25% → red
+];
+
+function hpColor(pct) {
+  for (const [thresh, col] of HP_COLORS) {
+    if (pct > thresh) return col;
+  }
+  return '#f87171';
+}
+
+// ── SVG robot builder ───────────────────────────────────────────────
+/**
+ * Generates an inline SVG string for a stylised Medarot robot.
+ * Part colours shift to grey when the part is destroyed.
+ * @param {Object} unit  - unit data from state
+ * @param {string} team  - "A" or "B"
+ * @returns {string} SVG markup
+ */
+function buildRobotSVG(unit, team) {
+  const p   = unit.parts;
+  const col = team === 'A' ? '#3b82f6' : '#ef4444';
+  const dim = '#334155';
+
+  const headCol = p.head.current_hp > 0 ? col : dim;
+  const raCol   = p.ra.current_hp   > 0 ? col : dim;
+  const laCol   = p.la.current_hp   > 0 ? col : dim;
+  const legCol  = p.leg.current_hp  > 0 ? col : dim;
+  const bodyCol = col;
+
+  // Destroyed parts get a cross-out class for the destroy animation trigger
+  const hC = p.head.current_hp <= 0 ? 'class="part-destroy"' : '';
+  const rC = p.ra.current_hp   <= 0 ? 'class="part-destroy"' : '';
+  const lC = p.la.current_hp   <= 0 ? 'class="part-destroy"' : '';
+  const lgC= p.leg.current_hp  <= 0 ? 'class="part-destroy"' : '';
+
+  return `
+  <svg class="robot-svg ${team === 'B' ? 'team-b' : ''}" id="robot-${unit.id}"
+       viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+    <!-- Leg -->
+    <g ${lgC}>
+      <rect x="25" y="62" width="12" height="14" rx="3" fill="${legCol}" opacity=".9"/>
+      <rect x="43" y="62" width="12" height="14" rx="3" fill="${legCol}" opacity=".9"/>
+    </g>
+    <!-- Body -->
+    <rect x="22" y="38" width="36" height="26" rx="5" fill="${bodyCol}" opacity=".85"/>
+    <!-- Core gem -->
+    <circle cx="40" cy="51" r="5" fill="rgba(255,255,255,.25)" stroke="${col}" stroke-width="1.5"/>
+    <!-- Left Arm -->
+    <g ${lC}>
+      <rect x="6" y="38" width="14" height="10" rx="3" fill="${laCol}" opacity=".9"/>
+      <rect x="4" y="45" width="10" height="14" rx="3" fill="${laCol}" opacity=".75"/>
+    </g>
+    <!-- Right Arm -->
+    <g ${rC}>
+      <rect x="60" y="38" width="14" height="10" rx="3" fill="${raCol}" opacity=".9"/>
+      <rect x="66" y="45" width="10" height="14" rx="3" fill="${raCol}" opacity=".75"/>
+    </g>
+    <!-- Head -->
+    <g ${hC}>
+      <rect x="28" y="18" width="24" height="22" rx="6" fill="${headCol}" opacity=".95"/>
+      <!-- Eyes -->
+      <circle cx="35" cy="28" r="3.5" fill="rgba(255,255,255,.9)"/>
+      <circle cx="45" cy="28" r="3.5" fill="rgba(255,255,255,.9)"/>
+      <circle cx="35" cy="28" r="2"   fill="${p.head.current_hp > 0 ? '#facc15' : '#334155'}"/>
+      <circle cx="45" cy="28" r="2"   fill="${p.head.current_hp > 0 ? '#facc15' : '#334155'}"/>
+    </g>
+    <!-- Incapacitated overlay -->
+    ${unit.incapacitated ? `
+      <line x1="10" y1="10" x2="70" y2="70" stroke="#f87171" stroke-width="3" opacity=".7"/>
+      <line x1="70" y1="10" x2="10" y2="70" stroke="#f87171" stroke-width="3" opacity=".7"/>
+    ` : ''}
+  </svg>`;
+}
+
+// ── Unit card builder ───────────────────────────────────────────────
+
+function buildUnitCard(unit, team, leaderIndex, idx) {
+  const isLeader  = idx === leaderIndex;
+  const partOrder = [
+    {key: 'head', label: '頭部'},
+    {key: 'ra',   label: '右腕'},
+    {key: 'la',   label: '左腕'},
+    {key: 'leg',  label: '脚部'},
+  ];
+
+  const partsHTML = partOrder.map(({key, label}) => {
+    const p   = unit.parts[key];
+    const pct = p.max_hp > 0 ? Math.max(0, p.current_hp / p.max_hp) : 0;
+    return `
+    <div class="part-row" id="partrow-${unit.id}-${key}">
+      <div class="part-label">
+        <span>${label}</span>
+        <span>${p.current_hp}/${p.max_hp}</span>
+      </div>
+      <div class="hp-track">
+        <div class="hp-fill" id="hp-${unit.id}-${key}"
+             style="width:${pct*100}%;background-color:${hpColor(pct)}"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const gaugePct = Math.min(100, unit.gauge / 10);
+
+  return `
+  <div class="unit-card ${isLeader ? 'is-leader' : ''} ${unit.incapacitated ? 'incapacitated' : ''}"
+       id="card-${unit.id}">
+    <div class="unit-name">${unit.name}</div>
+    ${buildRobotSVG(unit, team)}
+    <div class="gauge-row">
+      <span class="gauge-label">ゲージ</span>
+      <div class="gauge-track">
+        <div class="gauge-fill" id="gauge-${unit.id}"
+             style="width:${gaugePct}%"></div>
+      </div>
+    </div>
+    <div class="parts-grid">${partsHTML}</div>
+  </div>`;
+}
+
+// ── Render both teams ───────────────────────────────────────────────
+
+function renderTeams(s) {
+  const panelA = document.getElementById('panel-a');
+  const panelB = document.getElementById('panel-b');
+
+  // Clear previous unit cards (keep the title div)
+  [...panelA.querySelectorAll('.unit-card')].forEach(el => el.remove());
+  [...panelB.querySelectorAll('.unit-card')].forEach(el => el.remove());
+
+  document.getElementById('name-a').textContent = s.team_a.name;
+  document.getElementById('name-b').textContent = s.team_b.name;
+
+  s.team_a.units.forEach((u, i) => {
+    panelA.insertAdjacentHTML('beforeend',
+      buildUnitCard(u, 'A', s.team_a.leader_index, i));
+  });
+  s.team_b.units.forEach((u, i) => {
+    panelB.insertAdjacentHTML('beforeend',
+      buildUnitCard(u, 'B', s.team_b.leader_index, i));
+  });
+}
+
+// ── Patch (update in-place) ─────────────────────────────────────────
+/**
+ * Update HP bars, gauges, and incapacitation state without full re-render.
+ * Triggers animations for acting / hit units.
+ */
+function patchState(s) {
+  const allUnits = [...s.team_a.units, ...s.team_b.units];
+  allUnits.forEach(unit => {
+    // Gauge
+    const gEl = document.getElementById(`gauge-${unit.id}`);
+    if (gEl) {
+      const pct = Math.min(100, unit.gauge / 10);
+      gEl.style.width = pct + '%';
+    }
+
+    // HP bars
+    ['head', 'ra', 'la', 'leg'].forEach(key => {
+      const hp = unit.parts[key];
+      const fill = document.getElementById(`hp-${unit.id}-${key}`);
+      if (fill) {
+        const pct = hp.max_hp > 0 ? Math.max(0, hp.current_hp / hp.max_hp) : 0;
+        fill.style.width = (pct * 100) + '%';
+        fill.style.backgroundColor = hpColor(pct);
+      }
+    });
+
+    // Incapacitation toggle
+    const card = document.getElementById(`card-${unit.id}`);
+    if (card) {
+      card.classList.toggle('incapacitated', unit.incapacitated);
+    }
+
+    // Update robot SVG (replace to reflect part destruction colours)
+    const robotEl = document.getElementById(`robot-${unit.id}`);
+    if (robotEl) {
+      const team = s.team_a.units.some(u => u.id === unit.id) ? 'A' : 'B';
+      const tmp = document.createElement('div');
+      tmp.innerHTML = buildRobotSVG(unit, team);
+      robotEl.replaceWith(tmp.firstElementChild);
+    }
+  });
+}
+
+// ── Timeline SVG ────────────────────────────────────────────────────
+
+const TL_COLORS_A = ['#3b82f6', '#60a5fa', '#93c5fd'];
+const TL_COLORS_B = ['#ef4444', '#f87171', '#fca5a5'];
+
+function renderTimeline(s) {
+  const g = document.getElementById('tl-icons');
+  g.innerHTML = '';
+
+  const TRACK_X0 = 20, TRACK_W = 860;
+  const ROW_A_Y = 20, ROW_B_Y = 45;
+
+  [...s.team_a.units].forEach((u, i) => {
+    const x  = TRACK_X0 + (u.gauge / 1000) * TRACK_W;
+    const col = u.incapacitated ? '#334155' : TL_COLORS_A[i];
+    const el  = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    el.setAttribute('transform', `translate(${x},${ROW_A_Y})`);
+    el.innerHTML = `
+      <circle r="8" fill="${col}" stroke="#fff" stroke-width="1.5" opacity="${u.incapacitated ? .3 : 1}"/>
+      <text x="0" y="4" text-anchor="middle" fill="#fff" font-size="7" font-family="sans-serif">${u.name[0]}</text>`;
+    if (!u.incapacitated && u.gauge >= 990) {
+      el.querySelector('circle').style.animation = 'command-pulse .5s ease-in-out infinite';
+    }
+    g.appendChild(el);
+  });
+
+  [...s.team_b.units].forEach((u, i) => {
+    const x  = TRACK_X0 + (u.gauge / 1000) * TRACK_W;
+    const col = u.incapacitated ? '#334155' : TL_COLORS_B[i];
+    const el  = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    el.setAttribute('transform', `translate(${x},${ROW_B_Y})`);
+    el.innerHTML = `
+      <circle r="8" fill="${col}" stroke="#fff" stroke-width="1.5" opacity="${u.incapacitated ? .3 : 1}"/>
+      <text x="0" y="4" text-anchor="middle" fill="#fff" font-size="7" font-family="sans-serif">${u.name[0]}</text>`;
+    g.appendChild(el);
+  });
+}
+
+// ── Event log ────────────────────────────────────────────────────────
+
+function appendEvents(events) {
+  const log = document.getElementById('log-entries');
+  events.forEach(ev => {
+    const actorClass = ev.actor_team === 'A' ? 'actor-a' : 'actor-b';
+    let   body       = '';
+
+    if (ev.action === 'HEAL') {
+      body = `<span class="heal">+${Math.abs(ev.damage).toFixed(0)} 回復</span> → ${ev.target_name}`;
+    } else if (ev.action === 'GUARD') {
+      body = `ガード！`;
+    } else if (ev.action === 'SUPPORT') {
+      body = `サポート → ${ev.target_name}`;
+    } else if (ev.action === 'DOT') {
+      body = `<span class="dmg">継続ダメージ ${ev.damage.toFixed(0)}</span> → ${ev.target_name}`;
+    } else if (!ev.hit) {
+      body = `ミス！（${ev.target_name}）`;
+    } else {
+      body = `<span class="dmg">${ev.damage.toFixed(0)} ダメージ</span> → ${ev.target_name}`;
+      if (ev.part_destroyed) {
+        body += ` <span class="destroy"> 🔥${ev.part_destroyed}</span>`;
+      }
+    }
+
+    const entry = document.createElement('div');
+    entry.className = 'event-entry';
+    entry.innerHTML =
+      `<span class="tick">[${ev.tick}]</span>` +
+      `<span class="${actorClass}">${ev.actor_name}</span>` +
+      ` [${ev.part_name}] ` + body;
+    log.prepend(entry);
+  });
+
+  // Keep log length manageable
+  while (log.children.length > 60) log.removeChild(log.lastChild);
+}
+
+// ── Attack animation triggers ────────────────────────────────────────
+
+function triggerAttackAnimation(events, allUnits) {
+  events.forEach(ev => {
+    if (!ev.hit && ev.action !== 'HEAL' && ev.action !== 'GUARD') return;
+
+    // Find actor robot SVG
+    const actorUnit = allUnits.find(u => u.name === ev.actor_name);
+    if (actorUnit) {
+      const robot = document.getElementById(`robot-${actorUnit.id}`);
+      if (robot) {
+        const isA = ev.actor_team === 'A';
+        const cls = isA ? 'dash-right' : 'dash-left';
+        robot.classList.add(cls);
+        robot.addEventListener('animationend', () => robot.classList.remove(cls), {once: true});
+      }
+      // Card glow
+      const card = document.getElementById(`card-${actorUnit.id}`);
+      if (card) {
+        card.classList.add('acting');
+        card.addEventListener('animationend', () => card.classList.remove('acting'), {once: true});
+      }
+    }
+
+    // Shake target
+    if (ev.target_name && ev.damage > 0) {
+      const targetUnit = allUnits.find(u => u.name === ev.target_name);
+      if (targetUnit) {
+        const card = document.getElementById(`card-${targetUnit.id}`);
+        if (card) {
+          card.classList.add('hit-shake');
+          card.addEventListener('animationend', () => card.classList.remove('hit-shake'), {once: true});
+        }
+      }
+    }
+  });
+}
+
+// ── Status banner ────────────────────────────────────────────────────
+
+function updateBanner(s) {
+  const banner = document.getElementById('status-banner');
+  if (s.is_finished) {
+    if (s.winner === 'A') {
+      banner.textContent = `🏆 ${s.team_a.name} の勝利！`;
+      banner.className = 'win-a';
+    } else if (s.winner === 'B') {
+      banner.textContent = `🏆 ${s.team_b.name} の勝利！`;
+      banner.className = 'win-b';
+    } else {
+      banner.textContent = '引き分け';
+      banner.className = '';
+    }
+    stopAuto();
+  } else {
+    banner.textContent = `ターン ${s.tick}`;
+    banner.className = '';
+  }
+}
+
+// ── Full render ──────────────────────────────────────────────────────
+
+let firstRender = true;
+
+function renderState(s, newEvents) {
+  if (firstRender) {
+    renderTeams(s);
+    firstRender = false;
+  } else {
+    patchState(s);
+  }
+  renderTimeline(s);
+  updateBanner(s);
+
+  if (newEvents && newEvents.length > 0) {
+    const allUnits = [...s.team_a.units, ...s.team_b.units];
+    triggerAttackAnimation(newEvents, allUnits);
+    appendEvents(newEvents);
+  }
+}
+
+// ── Step function ────────────────────────────────────────────────────
+
+let stepping = false;
+
+async function doStep() {
+  if (stepping || state.is_finished) return;
+  stepping = true;
+  try {
+    const resp  = await fetch(STEP_URL);
+    const data  = await resp.json();
+    state = data;
+    renderState(state, data.new_events || []);
+  } catch (e) {
+    console.error('Step failed:', e);
+  } finally {
+    stepping = false;
+  }
+}
+
+// ── Auto play ────────────────────────────────────────────────────────
+
+function startAuto() {
+  if (autoTimer) return;
+  autoPlay = true;
+  document.getElementById('btn-auto').textContent = '⏸ 自動進行 OFF';
+  autoTimer = setInterval(async () => {
+    if (state.is_finished) { stopAuto(); return; }
+    await doStep();
+  }, POLL_MS);
+}
+
+function stopAuto() {
+  autoPlay = false;
+  clearInterval(autoTimer);
+  autoTimer = null;
+  document.getElementById('btn-auto').textContent = '▶ 自動進行 ON';
+}
+
+// ── Reset ────────────────────────────────────────────────────────────
+
+async function doReset() {
+  stopAuto();
+  firstRender = true;
+  try {
+    const resp = await fetch(NEW_URL, {method: 'POST'});
+    const data = await resp.json();
+    // Reload the page pointing at the new session
+    window.location.href = `/?session=${data.session_id}`;
+  } catch (e) {
+    window.location.reload();
+  }
+}
+
+// ── Button wiring ────────────────────────────────────────────────────
+
+document.getElementById('btn-auto').addEventListener('click', () => {
+  if (autoPlay) stopAuto(); else startAuto();
+});
+
+document.getElementById('btn-step').addEventListener('click', doStep);
+document.getElementById('btn-reset').addEventListener('click', doReset);
+
+// ── Initial render ───────────────────────────────────────────────────
+renderState(state, state.events || []);
+</script>
+</body>
+</html>
