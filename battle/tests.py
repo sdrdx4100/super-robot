@@ -11,6 +11,8 @@ Tests cover:
 from __future__ import annotations
 
 import json
+import random
+from itertools import count
 from django.test import TestCase, Client
 
 from .services.engine_logic import (
@@ -24,6 +26,7 @@ from .services.engine_logic import (
     SkillKind,
     SpecialEffect,
     TeamState,
+    TimelinePhase,
     TargetSelector,
     apply_part_destruction,
     build_state_from_db,
@@ -31,6 +34,7 @@ from .services.engine_logic import (
     state_from_json,
     state_to_json,
 )
+from .views import _state_to_dict
 from .models import (
     Attribute,
     BattleSession,
@@ -44,6 +48,8 @@ from .models import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+_UNIT_IDS = count(1)
 
 def _make_attr(
     armor: int = 100,
@@ -84,9 +90,10 @@ def _make_unit(
     personality: Personality = Personality.RANDOM,
     gauge: float = 0.0,
     incapacitated: bool = False,
+    medarot_id: int | None = None,
 ) -> MedarotState:
     return MedarotState(
-        medarot_id=1,
+        medarot_id=medarot_id or next(_UNIT_IDS),
         name=name,
         personality=personality,
         skill_head=5,
@@ -236,6 +243,22 @@ class DamageCalculationTests(TestCase):
             if not hit:
                 self.assertEqual(dmg, 0.0)
 
+    def test_cooling_target_takes_bonus_damage_and_loses_evasion(self) -> None:
+        actor = _make_unit("Actor")
+        actor.part_head.attr.success = 999
+        target = _make_unit("Target")
+        target.phase = TimelinePhase.CLR
+
+        original_uniform = random.uniform
+        try:
+            random.uniform = lambda a, b: 0 if b == 100 else 1.0
+            dmg, hit = calculate_damage(actor, actor.part_head, target)
+        finally:
+            random.uniform = original_uniform
+
+        self.assertTrue(hit)
+        self.assertEqual(dmg, 21.0)
+
 
 # ---------------------------------------------------------------------------
 # Part-destruction tests
@@ -339,6 +362,74 @@ class BattleEngineTests(TestCase):
         self.assertEqual(restored.tick, updated.tick)
         self.assertEqual(len(restored.team_a.units), 3)
 
+    def test_actor_enters_cooling_phase_after_action(self) -> None:
+        actor = _make_unit("Leader", gauge=950.0)
+        actor.part_leg.attr.charge = 60
+        actor.part_head.attr.success = 999
+        target = _make_unit("Enemy")
+        state = _make_battle(
+            _make_team("TeamA", 1, units=[actor, _make_unit("Ally1"), _make_unit("Ally2")]),
+            _make_team("TeamB", 2, units=[target, _make_unit("Enemy2"), _make_unit("Enemy3")]),
+        )
+
+        updated, events = BattleEngine(state).advance()
+
+        self.assertEqual(updated.team_a.units[0].phase, TimelinePhase.CLR)
+        self.assertEqual(updated.team_a.units[0].gauge, 1000.0)
+        self.assertIn("COOLING", [event.action for event in events])
+
+    def test_cooling_unit_returns_to_charge_phase_at_base_line(self) -> None:
+        unit = _make_unit("Cooler", gauge=20.0)
+        unit.phase = TimelinePhase.CLR
+        unit.part_leg.attr.cooldown = 50
+        state = _make_battle(
+            _make_team("TeamA", 1, units=[unit, _make_unit("A2"), _make_unit("A3")]),
+            _make_team("TeamB", 2),
+        )
+        engine = BattleEngine(state)
+
+        engine._tick_all_units()
+
+        self.assertEqual(unit.gauge, 0.0)
+        self.assertEqual(unit.phase, TimelinePhase.CHG)
+
+    def test_ready_stack_acts_in_lifo_order_without_advancing_tick(self) -> None:
+        first = _make_unit("First", gauge=1000.0)
+        first.phase = TimelinePhase.ACT
+        second = _make_unit("Second", gauge=1000.0)
+        second.phase = TimelinePhase.ACT
+        first.part_head.attr.success = 999
+        second.part_head.attr.success = 999
+        state = _make_battle(
+            _make_team("TeamA", 1, units=[first, second, _make_unit("Ally")]),
+            _make_team("TeamB", 2),
+        )
+        state.ready_stack = [first.medarot_id, second.medarot_id]
+        engine = BattleEngine(state)
+
+        updated, events = engine.advance()
+
+        self.assertEqual(updated.tick, 0)
+        self.assertEqual(events[0].actor_name, "Second")
+        self.assertEqual(updated.ready_stack, [first.medarot_id])
+
+    def test_attack_log_notes_cooling_target(self) -> None:
+        actor = _make_unit("Actor", gauge=1000.0)
+        actor.phase = TimelinePhase.ACT
+        actor.part_head.attr.success = 999
+        target = _make_unit("Target")
+        target.phase = TimelinePhase.CLR
+        state = _make_battle(
+            _make_team("TeamA", 1, units=[actor, _make_unit("A2"), _make_unit("A3")]),
+            _make_team("TeamB", 2, units=[target, _make_unit("B2"), _make_unit("B3")]),
+        )
+        state.ready_stack = [actor.medarot_id]
+
+        _, events = BattleEngine(state).advance()
+        attack_event = next(event for event in events if event.target_name == "Target")
+
+        self.assertEqual(attack_event.note, "（放熱中につき回避不能！）")
+
 
 # ---------------------------------------------------------------------------
 # Django model + view tests
@@ -431,6 +522,8 @@ class APIViewTests(TestCase):
         self.assertIn("team_a", data)
         self.assertIn("team_b", data)
         self.assertFalse(data["is_finished"])
+        self.assertIn("phase", data["team_a"]["units"][0])
+        self.assertIn("is_cooling", data["team_a"]["units"][0])
 
     def test_battle_finishes_after_many_steps(self) -> None:
         resp = self.client.post("/api/battle/new/")
@@ -463,3 +556,44 @@ class APIViewTests(TestCase):
     def test_404_for_nonexistent_session(self) -> None:
         resp = self.client.get("/api/battle/99999/step/")
         self.assertEqual(resp.status_code, 404)
+
+
+class ViewSerialisationTests(TestCase):
+    def test_state_to_dict_maps_legacy_cooling_status_to_phase(self) -> None:
+        state = state_from_json(json.dumps({
+            "tick": 0,
+            "team_a": {
+                "team_id": 1,
+                "name": "A",
+                "leader_index": 0,
+                "units": [{
+                    "medarot_id": 1,
+                    "name": "Legacy",
+                    "personality": "RANDOM",
+                    "skill_head": 5,
+                    "skill_ra": 5,
+                    "skill_la": 5,
+                    "skill_leg": 5,
+                    "part_head": _make_part(PartSystem.HEAD, SkillKind.SHOOT).model_dump(),
+                    "part_ra": _make_part(PartSystem.RIGHT_ARM, SkillKind.SHOOT).model_dump(),
+                    "part_la": _make_part(PartSystem.LEFT_ARM, SkillKind.MELEE).model_dump(),
+                    "part_leg": _make_part(PartSystem.LEG, SkillKind.NONE).model_dump(),
+                    "gauge": 700.0,
+                    "cooling_down": True,
+                }],
+            },
+            "team_b": {
+                "team_id": 2,
+                "name": "B",
+                "leader_index": 0,
+                "units": [_make_unit("Enemy").model_dump()],
+            },
+            "events": [],
+            "is_finished": False,
+            "winner": "",
+        }))
+
+        data = _state_to_dict(state)
+
+        self.assertEqual(data["team_a"]["units"][0]["phase"], "CLR")
+        self.assertTrue(data["team_a"]["units"][0]["is_cooling"])

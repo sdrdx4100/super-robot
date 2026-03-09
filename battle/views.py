@@ -43,6 +43,7 @@ from .models import (
 from .services.engine_logic import (
     BattleEngine,
     BattleState,
+    TimelinePhase,
     build_state_from_db,
     state_from_json,
     state_to_json,
@@ -200,12 +201,15 @@ def _state_to_dict(state: BattleState) -> dict[str, Any]:
         }
 
     def unit_dict(u: Any) -> dict[str, Any]:
+        is_cooling = u.phase == TimelinePhase.CLR
         return {
             "id": u.medarot_id,
             "name": u.name,
             "personality": u.personality.value,
             "gauge": round(u.gauge, 1),
-            "cooling_down": u.cooling_down,
+            "phase": u.phase.value,
+            "is_cooling": is_cooling,
+            "cooling_down": is_cooling,
             "incapacitated": u.incapacitated,
             "leg_broken": u.leg_broken,
             "is_alive": u.is_alive,

@@ -8,12 +8,19 @@ running the engine, then persisting the resulting state back to the DB.
 
 Timeline mechanic (inspired by the Medarot series)
 ----------------------------------------------------
-Every unit has an internal gauge that starts at 0 (Base Line) and rises to
-1000 (Command Line).  When a unit reaches 1000 it executes its action and
-then cools down back toward 0 at the cooldown rate.
+Every unit has an internal gauge that oscillates between the Base Line (0)
+and the Command Line (1000).
 
-  advance_rate  = base_charge  * leg_charge_factor  (0–1000 range per tick)
-  cooldown_rate = base_cooldown * leg_cooldown_factor
+  CHG → gauge rises from 0 to 1000
+  ACT → gauge has reached 1000 and is queued to act
+  CLR → gauge falls from 1000 back to 0
+
+During CHG the unit can evade / defend normally. During CLR it cannot evade
+or defend, so incoming attacks become easier to land and deal increased
+damage.
+
+  advance_rate  = leg_charge   * leg_charge_factor
+  cooldown_rate = leg_cooldown * leg_cooldown_factor
 
 Leg destruction halves both rates permanently.
 
@@ -85,6 +92,14 @@ class Personality(str, Enum):
     STRONG = "STRONG"
 
 
+class TimelinePhase(str, Enum):
+    """Timeline phase for a unit."""
+
+    CHG = "CHG"
+    ACT = "ACT"
+    CLR = "CLR"
+
+
 # ---------------------------------------------------------------------------
 # Pydantic data models
 # ---------------------------------------------------------------------------
@@ -152,8 +167,8 @@ class MedarotState(BaseModel):
 
     # Timeline gauge (0 = Base Line, 1000 = Command Line)
     gauge: float = 0.0
-    # True while the unit is cooling down (moving from 1000 back to 0)
-    cooling_down: bool = False
+    # Current timeline phase
+    phase: TimelinePhase = TimelinePhase.CHG
     # Leg-destruction flag — halves both advance and cooldown rates
     leg_broken: bool = False
     # Head-destruction / incapacitation flag
@@ -162,10 +177,28 @@ class MedarotState(BaseModel):
     dot_turns_remaining: int = 0
     dot_damage_per_turn: float = 0.0
 
+    @model_validator(mode="before")
+    @classmethod
+    def infer_phase_from_legacy_data(cls, data: dict[str, Any]) -> dict[str, Any]:
+        """Map legacy cooling_down state into the phase-based timeline model."""
+        if "phase" not in data:
+            if data.get("cooling_down"):
+                data["phase"] = TimelinePhase.CLR
+            elif float(data.get("gauge", 0.0)) >= 1000.0:
+                data["phase"] = TimelinePhase.ACT
+            else:
+                data["phase"] = TimelinePhase.CHG
+        return data
+
     @property
     def is_alive(self) -> bool:
         """Return True while the unit can still act."""
         return not self.incapacitated and not self.part_head.attr.is_destroyed
+
+    @property
+    def cooling_down(self) -> bool:
+        """Compatibility helper for code paths that still inspect cooldown state."""
+        return self.phase == TimelinePhase.CLR
 
     def skill_for(self, system: PartSystem) -> int:
         """Return the Medal skill level for the given part system."""
@@ -241,6 +274,7 @@ class BattleEvent(BaseModel):
     hit: bool = True
     special: str = ""
     part_destroyed: str = ""  # name of destroyed part, if any
+    note: str = ""
 
 
 class BattleState(BaseModel):
@@ -250,6 +284,7 @@ class BattleState(BaseModel):
     team_a: TeamState
     team_b: TeamState
     events: list[BattleEvent] = Field(default_factory=list)
+    ready_stack: list[int] = Field(default_factory=list)
     is_finished: bool = False
     winner: str = ""  # "A" or "B"
 
@@ -338,10 +373,15 @@ def calculate_damage(
     (damage, hit) — damage is 0 when the attack misses.
     """
     skill_level = actor.skill_for(acting_part.system)
+    target_is_cooling = target.phase == TimelinePhase.CLR
 
     # Hit determination
-    target_evasion = target.part_leg.attr.success if not target.part_leg.attr.is_destroyed else 0
-    target_propulsion = target.part_leg.attr.charge if not target.part_leg.attr.is_destroyed else 0
+    if target_is_cooling:
+        target_evasion = 0
+        target_propulsion = 0
+    else:
+        target_evasion = target.part_leg.attr.success if not target.part_leg.attr.is_destroyed else 0
+        target_propulsion = target.part_leg.attr.charge if not target.part_leg.attr.is_destroyed else 0
     divisor = max(1, target_evasion + target_propulsion)
     hit_pct = (acting_part.attr.success + skill_level) / divisor * 100
     hit_pct = min(hit_pct, 95.0)  # cap at 95 % for balance
@@ -359,6 +399,9 @@ def calculate_damage(
     # Pierce ignores armour reduction
     if acting_part.special_effect == SpecialEffect.PIERCE:
         final_dmg = max(1.0, base_dmg)
+
+    if target_is_cooling:
+        final_dmg *= 1.2
 
     return round(final_dmg, 1), True
 
@@ -438,6 +481,16 @@ class BattleEngine:
         if self.state.is_finished:
             return self.state, new_events
 
+        actor, actor_team_label = self._pop_ready_unit()
+        if actor is not None:
+            new_events.extend(self._execute_action(actor, actor_team_label))
+            result = self._check_victory()
+            if result:
+                self.state.is_finished = True
+                self.state.winner = result
+            self.state.events.extend(new_events)
+            return self.state, new_events
+
         # Advance gauges until a unit hits the Command Line
         max_iterations = 10_000
         for _ in range(max_iterations):
@@ -445,7 +498,7 @@ class BattleEngine:
 
             self._tick_all_units()
 
-            actor, actor_team_label = self._find_acting_unit()
+            actor, actor_team_label = self._pop_ready_unit()
             if actor is not None:
                 events = self._execute_action(actor, actor_team_label)
                 new_events.extend(events)
@@ -474,21 +527,39 @@ class BattleEngine:
             for unit in team.units:
                 if not unit.is_alive:
                     continue
-                if unit.cooling_down:
-                    unit.gauge = max(self.BASE_LINE, unit.gauge - unit.cooldown_rate())
+                if unit.phase == TimelinePhase.CLR:
+                    unit.gauge -= unit.cooldown_rate()
                     if unit.gauge <= self.BASE_LINE:
-                        unit.cooling_down = False  # back at base, start charging again
-                else:
-                    unit.gauge = min(self.COMMAND_LINE, unit.gauge + unit.advance_rate())
+                        unit.gauge = self.BASE_LINE
+                        unit.phase = TimelinePhase.CHG
+                elif unit.phase == TimelinePhase.CHG:
+                    unit.gauge += unit.advance_rate()
+                    if unit.gauge >= self.COMMAND_LINE:
+                        unit.gauge = self.COMMAND_LINE
+                        unit.phase = TimelinePhase.ACT
+                        self._push_ready_unit(unit)
 
-    def _find_acting_unit(self) -> tuple[MedarotState | None, str]:
-        """Return the first unit that has reached the Command Line (gauge == 1000).
+    def _push_ready_unit(self, unit: MedarotState) -> None:
+        """Remember that a unit reached the Command Line this tick."""
+        if unit.medarot_id not in self.state.ready_stack:
+            self.state.ready_stack.append(unit.medarot_id)
 
-        Returns (unit, team_label) or (None, "").
-        """
+    def _pop_ready_unit(self) -> tuple[MedarotState | None, str]:
+        """Pop the most recent Command Line arrival from the wait stack."""
+        while self.state.ready_stack:
+            medarot_id = self.state.ready_stack.pop()
+            actor, team_label = self._find_unit(medarot_id)
+            if actor is None or not actor.is_alive:
+                continue
+            if actor.phase == TimelinePhase.ACT and actor.gauge >= self.COMMAND_LINE:
+                return actor, team_label
+        return None, ""
+
+    def _find_unit(self, medarot_id: int) -> tuple[MedarotState | None, str]:
+        """Resolve a Medarot id back to the in-memory unit and team label."""
         for label, team in (("A", self.state.team_a), ("B", self.state.team_b)):
             for unit in team.units:
-                if unit.is_alive and unit.gauge >= self.COMMAND_LINE and not unit.cooling_down:
+                if unit.medarot_id == medarot_id:
                     return unit, label
         return None, ""
 
@@ -500,7 +571,7 @@ class BattleEngine:
 
         # Mark as cooling down immediately
         actor.gauge = self.COMMAND_LINE
-        actor.cooling_down = True
+        actor.phase = TimelinePhase.CLR
 
         acting_part = actor.choose_action_part()
         if acting_part is None:
@@ -513,6 +584,7 @@ class BattleEngine:
                     action="待機",
                 )
             )
+            events.append(self._cooling_start_event(actor, actor_team_label))
             return events
 
         enemy_team = (
@@ -532,6 +604,7 @@ class BattleEngine:
 
             dmg, hit = calculate_damage(actor, acting_part, target)
             part_destroyed_msg = ""
+            note = "（放熱中につき回避不能！）" if hit and target.phase == TimelinePhase.CLR else ""
 
             if hit and dmg > 0:
                 # Damage the target's head by default (simplified model)
@@ -559,8 +632,10 @@ class BattleEngine:
                     hit=hit,
                     special=acting_part.special_effect.value,
                     part_destroyed=part_destroyed_msg,
+                    note=note,
                 )
             )
+            events.append(self._cooling_start_event(actor, actor_team_label))
 
         # ------ Heal ------
         elif skill == SkillKind.HEAL:
@@ -591,6 +666,7 @@ class BattleEngine:
                         hit=True,
                     )
                 )
+            events.append(self._cooling_start_event(actor, actor_team_label))
 
         # ------ Guard ------
         elif skill == SkillKind.GUARD:
@@ -605,12 +681,13 @@ class BattleEngine:
                     hit=True,
                 )
             )
+            events.append(self._cooling_start_event(actor, actor_team_label))
 
         # ------ Support ------
         elif skill == SkillKind.SUPPORT:
             # Boosts the gauge of the weakest ally
             weakest = sorted(
-                ally_team.alive_units,
+                [u for u in ally_team.alive_units if u.phase != TimelinePhase.CLR],
                 key=lambda u: u.gauge,
             )
             if weakest:
@@ -618,6 +695,10 @@ class BattleEngine:
                 boost_target.gauge = min(
                     self.COMMAND_LINE, boost_target.gauge + 200
                 )
+                if boost_target.gauge >= self.COMMAND_LINE:
+                    boost_target.gauge = self.COMMAND_LINE
+                    boost_target.phase = TimelinePhase.ACT
+                    self._push_ready_unit(boost_target)
                 events.append(
                     BattleEvent(
                         tick=self.state.tick,
@@ -629,12 +710,28 @@ class BattleEngine:
                         hit=True,
                     )
                 )
+            events.append(self._cooling_start_event(actor, actor_team_label))
 
         # DoT ticks for all units
         dot_events = self._apply_dot_effects()
         events.extend(dot_events)
 
         return events
+
+    def _cooling_start_event(
+        self,
+        actor: MedarotState,
+        actor_team_label: str,
+    ) -> BattleEvent:
+        """Describe a unit beginning its return trip to the Base Line."""
+        return BattleEvent(
+            tick=self.state.tick,
+            actor_team=actor_team_label,
+            actor_name=actor.name,
+            part_name="放熱",
+            action="COOLING",
+            note=f"{actor.name} がベースラインへ帰還開始",
+        )
 
     def _apply_dot_effects(self) -> list[BattleEvent]:
         """Apply damage-over-time effects to all affected units."""
