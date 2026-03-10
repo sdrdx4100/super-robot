@@ -44,6 +44,7 @@ from .services.engine_logic import (
     BattleEngine,
     BattleState,
     TimelinePhase,
+    VALID_ACTION_PART_KEYS,
     build_state_from_db,
     state_from_json,
     state_to_json,
@@ -452,7 +453,7 @@ def battle_step(request: HttpRequest, session_id: int) -> JsonResponse:
         return JsonResponse({**_state_response_payload(state), "already_finished": True})
 
     action_part = request.GET.get("action_part")
-    if action_part not in {None, "head", "ra", "la", "leg"}:
+    if action_part is not None and action_part not in VALID_ACTION_PART_KEYS:
         return JsonResponse({"error": "invalid action_part"}, status=400)
 
     previous_state = state_from_json(session.state_json)

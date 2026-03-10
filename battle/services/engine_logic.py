@@ -100,6 +100,9 @@ class TimelinePhase(str, Enum):
     CLR = "CLR"
 
 
+VALID_ACTION_PART_KEYS = frozenset({"head", "ra", "la", "leg"})
+
+
 # ---------------------------------------------------------------------------
 # Pydantic data models
 # ---------------------------------------------------------------------------
@@ -230,7 +233,7 @@ class MedarotState(BaseModel):
 
     def action_part_for_slot(self, slot_key: str | None) -> PartState | None:
         """Return the action part mapped to a UI slot key if it is usable."""
-        if slot_key not in {"head", "ra", "la", "leg"}:
+        if slot_key not in VALID_ACTION_PART_KEYS:
             return None
         part = getattr(self, f"part_{slot_key}")
         if not part.is_usable or part.skill_kind == SkillKind.NONE:

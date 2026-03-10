@@ -1821,6 +1821,7 @@ const SESSION_ID = {{ session_id }};
 const STEP_URL = `/api/battle/${SESSION_ID}/step/`;
 const NEW_URL = `/api/battle/new/`;
 const DEFAULT_TIMELINE_VIEWBOX = '0 0 900 60';
+// Slow auto-play slightly so the command prompt and ATB movement stay readable during battle playback.
 const POLL_MS = 850;
 const PHASE_TIMINGS = {
   selection: 380,
@@ -1857,6 +1858,14 @@ const HP_COLORS = [
   [.25, '#facc15'],
   [0, '#f87171'],
 ];
+const COMMAND_ACTION_LABELS = {
+  SHOOT: 'うつ',
+  MELEE: 'なぐる',
+  HEAL: 'なおす',
+  SUPPORT: 'たすける',
+  GUARD: 'まもる',
+  NONE: '待機',
+};
 
 function hpColor(pct) {
   for (const [threshold, color] of HP_COLORS) {
@@ -2033,14 +2042,7 @@ function buildCommandOptions(unit) {
 
   return playerActions.map(action => ({
     ...action,
-    actionLabel: ({
-      SHOOT: 'うつ',
-      MELEE: 'なぐる',
-      HEAL: 'なおす',
-      SUPPORT: 'たすける',
-      GUARD: 'まもる',
-      NONE: '待機',
-    }[action.skill_kind] || action.skill_kind),
+    actionLabel: COMMAND_ACTION_LABELS[action.skill_kind] || action.skill_kind,
   }));
 }
 

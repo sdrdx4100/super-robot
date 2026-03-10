@@ -519,7 +519,12 @@ class BattleEngineTests(TestCase):
         )
         state.ready_stack = [actor.medarot_id]
 
-        _, events = BattleEngine(state).advance()
+        original_uniform = random.uniform
+        try:
+            random.uniform = lambda a, b: 0 if b == 100 else 1.0
+            _, events = BattleEngine(state).advance()
+        finally:
+            random.uniform = original_uniform
         attack_event = next(event for event in events if event.target_name == "Target")
 
         self.assertIn("放熱中につき回避不能", attack_event.note)
