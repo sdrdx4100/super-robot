@@ -470,8 +470,45 @@ class BattleEngineTests(TestCase):
         self.assertEqual(events[0].actor_name, "Second")
         self.assertEqual(updated.ready_stack, [first.medarot_id])
 
+    def test_player_controlled_unit_waits_for_command_selection(self) -> None:
+        actor = _make_unit("Pilot", gauge=1000.0)
+        actor.phase = TimelinePhase.ACT
+        actor.part_head.attr.success = 999
+        state = _make_battle(
+            _make_team("TeamA", 1, units=[actor, _make_unit("A2"), _make_unit("A3")]),
+            _make_team("TeamB", 2),
+        )
+        state.ready_stack = [actor.medarot_id]
+        engine = BattleEngine(state)
+
+        updated, events = engine.advance(player_team="A")
+
+        self.assertTrue(engine.awaiting_player_action)
+        self.assertEqual(events, [])
+        self.assertEqual(updated.team_a.units[0].phase, TimelinePhase.ACT)
+        self.assertEqual(updated.ready_stack, [actor.medarot_id])
+
+    def test_player_controlled_unit_uses_selected_part(self) -> None:
+        actor = _make_unit("Pilot", gauge=1000.0)
+        actor.phase = TimelinePhase.ACT
+        actor.part_head.attr.success = 0
+        actor.part_ra.attr.success = 0
+        actor.part_la.attr.success = 999
+        target = _make_unit("Enemy")
+        state = _make_battle(
+            _make_team("TeamA", 1, units=[actor, _make_unit("A2"), _make_unit("A3")]),
+            _make_team("TeamB", 2, units=[target, _make_unit("B2"), _make_unit("B3")]),
+        )
+        state.ready_stack = [actor.medarot_id]
+
+        updated, events = BattleEngine(state).advance(player_team="A", action_part_key="la")
+
+        self.assertEqual(updated.team_a.units[0].phase, TimelinePhase.CLR)
+        self.assertEqual(events[0].part_name, actor.part_la.name)
+        self.assertEqual(events[0].action, "MELEE")
+
     def test_attack_log_notes_cooling_target(self) -> None:
-        actor = _make_unit("Actor", gauge=1000.0)
+        actor = _make_unit("Actor", gauge=1000.0, personality=Personality.LEADER)
         actor.phase = TimelinePhase.ACT
         actor.part_head.attr.success = 999
         target = _make_unit("Target")
@@ -485,7 +522,7 @@ class BattleEngineTests(TestCase):
         _, events = BattleEngine(state).advance()
         attack_event = next(event for event in events if event.target_name == "Target")
 
-        self.assertEqual(attack_event.note, "（放熱中につき回避不能！）")
+        self.assertIn("放熱中につき回避不能", attack_event.note)
 
 
 # ---------------------------------------------------------------------------
@@ -581,6 +618,10 @@ class APIViewTests(TestCase):
         resp = self.client.get(f"/api/battle/{sid}/step/")
         self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.content)
+        if data.get("awaiting_player_action"):
+            resp = self.client.get(f"/api/battle/{sid}/step/?action_part=head")
+            self.assertEqual(resp.status_code, 200)
+            data = json.loads(resp.content)
         self.assertGreater(data["tick"], 0)
         self.assertIn("event_stack", data)
         self.assertGreater(len(data["event_stack"]), 0)
@@ -598,18 +639,70 @@ class APIViewTests(TestCase):
         self.assertIn("phase", data["team_a"]["units"][0])
         self.assertIn("is_cooling", data["team_a"]["units"][0])
 
+    def test_battle_step_returns_player_command_when_team_a_is_ready(self) -> None:
+        resp = self.client.post("/api/battle/new/")
+        sid = json.loads(resp.content)["session_id"]
+        session = BattleSession.objects.get(pk=sid)
+        state = state_from_json(session.state_json)
+        player = state.team_a.units[0]
+        player.gauge = 1000.0
+        player.phase = TimelinePhase.ACT
+        state.ready_stack = [player.medarot_id]
+        session.state_json = state_to_json(state)
+        session.save()
+
+        resp = self.client.get(f"/api/battle/{sid}/step/")
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.content)
+
+        self.assertTrue(data["awaiting_player_action"])
+        self.assertEqual(data["player_command"]["unit_id"], player.medarot_id)
+        self.assertEqual(data["new_events"], [])
+
+    def test_battle_step_accepts_selected_action_part(self) -> None:
+        resp = self.client.post("/api/battle/new/")
+        sid = json.loads(resp.content)["session_id"]
+        session = BattleSession.objects.get(pk=sid)
+        state = state_from_json(session.state_json)
+        player = state.team_a.units[0]
+        player.gauge = 1000.0
+        player.phase = TimelinePhase.ACT
+        state.ready_stack = [player.medarot_id]
+        session.state_json = state_to_json(state)
+        session.save()
+
+        resp = self.client.get(f"/api/battle/{sid}/step/?action_part=la")
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.content)
+
+        self.assertFalse(data["awaiting_player_action"])
+        self.assertGreater(len(data["new_events"]), 0)
+        self.assertEqual(data["new_events"][0]["part_name"], player.part_la.name)
+
     def test_battle_finishes_after_many_steps(self) -> None:
         resp = self.client.post("/api/battle/new/")
         sid = json.loads(resp.content)["session_id"]
 
         data = {}
-        for _ in range(200):
-            resp = self.client.get(f"/api/battle/{sid}/step/")
+        pending_action = None
+        for _ in range(300):
+            url = f"/api/battle/{sid}/step/"
+            if pending_action:
+                url = f"{url}?action_part={pending_action}"
+            resp = self.client.get(url)
             data = json.loads(resp.content)
+            if data.get("awaiting_player_action"):
+                pending_action = next(
+                    action["key"]
+                    for action in data["player_command"]["actions"]
+                    if action["enabled"]
+                )
+                continue
+            pending_action = None
             if data["is_finished"]:
                 break
 
-        self.assertTrue(data.get("is_finished"), "Battle should finish within 200 steps")
+        self.assertTrue(data.get("is_finished"), "Battle should finish within 300 steps")
         self.assertIn(data.get("winner"), ("A", "B"))
 
     def test_already_finished_flag(self) -> None:

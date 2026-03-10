@@ -1348,6 +1348,7 @@
     }
 
     .command-chip {
+      appearance: none;
       border-radius: 10px;
       border: 1px solid rgba(100, 116, 139, .28);
       background: rgba(15, 23, 42, .9);
@@ -1356,6 +1357,20 @@
       text-align: left;
       display: grid;
       gap: 4px;
+      width: 100%;
+      font: inherit;
+      cursor: pointer;
+      transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+    }
+
+    .command-chip:hover:not(:disabled) {
+      border-color: rgba(56, 189, 248, .72);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, .18), 0 8px 22px rgba(2, 6, 23, .26);
+      transform: translateY(-1px);
+    }
+
+    .command-chip:disabled {
+      cursor: default;
     }
 
     .command-chip strong {
@@ -1806,7 +1821,7 @@ const SESSION_ID = {{ session_id }};
 const STEP_URL = `/api/battle/${SESSION_ID}/step/`;
 const NEW_URL = `/api/battle/new/`;
 const DEFAULT_TIMELINE_VIEWBOX = '0 0 900 60';
-const POLL_MS = 300;
+const POLL_MS = 850;
 const PHASE_TIMINGS = {
   selection: 380,
   declaration: 780,
@@ -1873,8 +1888,9 @@ function setProgress(value) {
 }
 
 function syncActionControls() {
-  document.getElementById('btn-step').disabled = isGenerating || state.is_finished;
-  document.getElementById('btn-auto').disabled = isGenerating && !autoPlay;
+  const waitingForCommand = !!state.awaiting_player_action;
+  document.getElementById('btn-step').disabled = isGenerating || state.is_finished || waitingForCommand;
+  document.getElementById('btn-auto').disabled = (isGenerating && !autoPlay) || waitingForCommand;
   document.getElementById('btn-reset').disabled = isGenerating;
 }
 
@@ -2005,12 +2021,27 @@ function battlefieldPhaseLabel(unit) {
 }
 
 function buildCommandOptions(unit) {
-  return [
-    {label: 'うちぬき', part: unit.parts.head, hint: unit.parts.head.name},
-    {label: 'ねらいうち', part: unit.parts.ra, hint: unit.parts.ra.name},
-    {label: 'なぐり', part: unit.parts.la, hint: unit.parts.la.name},
-    {label: 'たてなおし', part: unit.parts.leg, hint: unit.parts.leg.name},
-  ];
+  const playerActions = state.player_command && state.player_command.unit_id === unit.id
+    ? state.player_command.actions
+    : getPartEntries(unit).map(({key, label, data}) => ({
+        key,
+        label,
+        part_name: data.name,
+        skill_kind: data.skill_kind,
+        enabled: data.current_hp > 0 && !data.disabled && data.skill_kind !== 'NONE',
+      }));
+
+  return playerActions.map(action => ({
+    ...action,
+    actionLabel: ({
+      SHOOT: 'うつ',
+      MELEE: 'なぐる',
+      HEAL: 'なおす',
+      SUPPORT: 'たすける',
+      GUARD: 'まもる',
+      NONE: '待機',
+    }[action.skill_kind] || action.skill_kind),
+  }));
 }
 
 function renderCommandMenu(s) {
@@ -2018,6 +2049,7 @@ function renderCommandMenu(s) {
   const pilot = document.getElementById('command-pilot');
   const status = document.getElementById('command-status');
   const menu = document.getElementById('command-menu');
+  const isAwaiting = !!s.awaiting_player_action;
 
   if (!activeUnit) {
     pilot.textContent = '行動待機なし';
@@ -2029,14 +2061,17 @@ function renderCommandMenu(s) {
   }
 
   pilot.textContent = `${activeUnit.name} のコマンド`;
-  status.textContent = '左ベースで行動を選択し、実行後は中央からベースへ放熱帰投します。';
-  menu.innerHTML = buildCommandOptions(activeUnit).map(({label, part, hint}) => {
-    const enabled = part.current_hp > 0 && !part.disabled;
+  status.textContent = isAwaiting
+    ? '使用するパーツを選ぶと、そのコマンドを解決します。'
+    : '次の味方が Active Line に到達するまで、コマンド待機中です。';
+  menu.innerHTML = buildCommandOptions(activeUnit).map(({key, label, actionLabel, part_name, enabled, skill_kind}) => {
+    const chipClass = enabled && isAwaiting ? 'command-chip' : `command-chip ${enabled ? '' : 'is-disabled'}`;
+    const disabledAttr = enabled && isAwaiting ? '' : 'disabled';
     return `
-      <div class="command-chip ${enabled ? '' : 'is-disabled'}">
-        <strong>${label}</strong>
-        <span>${hint}${enabled ? '' : ' / 使用不能'}</span>
-      </div>`;
+      <button type="button" class="${chipClass}" data-action-part="${key}" ${disabledAttr}>
+        <strong>${actionLabel}</strong>
+        <span>${label} / ${part_name}${enabled ? '' : ` / ${skill_kind === 'NONE' ? '使用不可' : '故障中'}`}</span>
+      </button>`;
   }).join('');
 }
 
@@ -2718,6 +2753,37 @@ async function doStep() {
   startGenerationPhase();
   try {
     const response = await fetch(STEP_URL);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    state = data;
+    renderState(state);
+    if (data.awaiting_player_action) {
+      stopAuto();
+      resetGenerationPhase(`${data.player_command?.unit_name || '味方ユニット'} のコマンドを選択してください。`);
+      updatePreviewMeta(state);
+      return;
+    }
+    const primaryEvent = (data.event_stack || []).find(isDramaticEvent);
+    if (primaryEvent) {
+      await playEventSequence(primaryEvent);
+    }
+    triggerBaseCardAnimations(data.new_events || [], state);
+    appendEvents(data.new_events || []);
+    finishGenerationPhase(describeEvent(primaryEvent));
+    updatePreviewMeta(state, primaryEvent);
+  } catch (error) {
+    console.error('Step failed:', error);
+    resetGenerationPhase('通信に失敗したため CHARGE 状態へ戻しました。');
+  }
+}
+
+async function executePlayerCommand(actionPart) {
+  if (!actionPart || isGenerating || state.is_finished) return;
+  isGenerating = true;
+  startGenerationPhase();
+  try {
+    const response = await fetch(`${STEP_URL}?action_part=${encodeURIComponent(actionPart)}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     state = data;
     renderState(state);
@@ -2730,8 +2796,8 @@ async function doStep() {
     finishGenerationPhase(describeEvent(primaryEvent));
     updatePreviewMeta(state, primaryEvent);
   } catch (error) {
-    console.error('Step failed:', error);
-    resetGenerationPhase('通信に失敗したため CHARGE 状態へ戻しました。');
+    console.error('Command failed:', error);
+    resetGenerationPhase('コマンド送信に失敗したため CHARGE 状態へ戻しました。');
   }
 }
 
@@ -2774,6 +2840,11 @@ document.getElementById('btn-auto').addEventListener('click', () => {
 });
 document.getElementById('btn-step').addEventListener('click', doStep);
 document.getElementById('btn-reset').addEventListener('click', doReset);
+document.getElementById('command-menu').addEventListener('click', event => {
+  const button = event.target.closest('[data-action-part]');
+  if (!button || button.disabled || !state.awaiting_player_action) return;
+  executePlayerCommand(button.dataset.actionPart);
+});
 renderState(state);
 resetGenerationPhase('コマンド実行で Charge → Action → Cooling の順に進みます。');
 if (state.events && state.events.length) appendEvents(state.events);
