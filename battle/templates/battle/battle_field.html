@@ -189,6 +189,12 @@
       line-height: 1.5;
     }
 
+    .diagram-hint {
+      color: var(--text-dim);
+      font-size: .72rem;
+      line-height: 1.5;
+    }
+
     #state-diagram {
       margin: 0;
       padding: 12px;
@@ -1113,6 +1119,7 @@ Ready --> Active: Generate / isGenerating = true
 Active --> Cooldown: response received / render result
 Active --> Ready: request error / unlock UI
 Cooldown --> Ready: timeline reset / isGenerating = false</pre>
+        <p class="diagram-hint">Mermaid 形式の状態遷移定義をそのまま表示し、実装ロジックの確認用として扱えるようにしています。</p>
       </section>
     </aside>
 
@@ -1125,7 +1132,7 @@ Cooldown --> Ready: timeline reset / isGenerating = false</pre>
           <text x="6" y="14" fill="#94a3b8" font-size="9" font-family="sans-serif">BL</text>
           <line x1="880" y1="10" x2="880" y2="50" stroke="#fbbf24" stroke-width="2" stroke-dasharray="4 2"></line>
           <text x="882" y="14" fill="#fbbf24" font-size="9" font-family="sans-serif">CL</text>
-          <text x="56" y="16" fill="#64748b" font-size="9" font-family="sans-serif">Ready → Active → Cooldown</text>
+          <text x="56" y="16" fill="#64748b" font-size="9" font-family="sans-serif">CHG / Ready → ACT / Active → CLR / Cooldown</text>
           <g id="tl-icons"></g>
         </svg>
         <p id="timeline-caption">API通信の進捗は中央ラインで可視化し、描画完了後にスムーズにリセットします。</p>
@@ -1221,6 +1228,14 @@ const GENERATION_PHASES = Object.freeze({
   ACTIVE: 'active',
   COOLDOWN: 'cooldown',
 });
+// Cap the simulated network progress below 100% so the final response can visibly complete the bar.
+const MAX_SIMULATED_PROGRESS = 88;
+// Small fixed increments keep the bar moving without racing to the completion state too early.
+const PROGRESS_INCREMENT_STEP = 6;
+// Update often enough to feel live while avoiding overly busy redraws.
+const PROGRESS_UPDATE_INTERVAL_MS = 180;
+// A short cooldown keeps the completion state visible before resetting back to Ready.
+const COOLDOWN_DURATION_MS = 720;
 
 let state = {{ initial_state|safe }};
 let autoPlay = false;
@@ -1267,12 +1282,21 @@ function setProgress(value) {
   document.getElementById('phase-progress').style.width = `${Math.max(0, Math.min(100, value))}%`;
 }
 
+function historyPhaseLabel(phase) {
+  return {
+    [GENERATION_PHASES.READY]: 'Ready Phase restored',
+    [GENERATION_PHASES.ACTIVE]: 'Active Phase snapshot',
+    [GENERATION_PHASES.COOLDOWN]: 'Cooldown Phase complete',
+  }[phase] || 'State synced';
+}
+
 function syncActionControls() {
   document.getElementById('btn-generate').disabled = isGenerating || state.is_finished;
+  document.getElementById('btn-auto').disabled = isGenerating && !autoPlay;
   document.getElementById('btn-reset').disabled = isGenerating;
 }
 
-function setGenerationPhase(phase, statusText, helperText, progress = null) {
+function setGenerationPhase(phase, phaseStatusText, helperText, progress = null) {
   generationPhase = phase;
   document.body.dataset.phase = phase;
   const chip = document.getElementById('phase-chip');
@@ -1282,7 +1306,7 @@ function setGenerationPhase(phase, statusText, helperText, progress = null) {
     : phase === GENERATION_PHASES.COOLDOWN
       ? 'Cooldown Phase'
       : 'Ready Phase';
-  document.getElementById('phase-status').textContent = statusText;
+  document.getElementById('phase-status').textContent = phaseStatusText;
   document.getElementById('phase-helper').textContent = helperText;
   if (progress !== null) setProgress(progress);
   syncActionControls();
@@ -1291,7 +1315,6 @@ function setGenerationPhase(phase, statusText, helperText, progress = null) {
 function startGenerationPhase() {
   clearCooldownTimer();
   clearProgressTimer();
-  isGenerating = true;
   let progress = 12;
   setGenerationPhase(
     GENERATION_PHASES.ACTIVE,
@@ -1300,9 +1323,9 @@ function startGenerationPhase() {
     progress,
   );
   progressTimer = window.setInterval(() => {
-    progress = Math.min(88, progress + 6);
+    progress = Math.min(MAX_SIMULATED_PROGRESS, progress + PROGRESS_INCREMENT_STEP);
     setProgress(progress);
-  }, 180);
+  }, PROGRESS_UPDATE_INTERVAL_MS);
 }
 
 function finishGenerationPhase(summaryText) {
@@ -1322,7 +1345,7 @@ function finishGenerationPhase(summaryText) {
       '次の Generate に備えてタイムラインをリセットしました。',
       0,
     );
-  }, 720);
+  }, COOLDOWN_DURATION_MS);
 }
 
 function resetGenerationPhase(message) {
@@ -1595,9 +1618,12 @@ function appendEvents(events) {
 
 function describeEvent(eventMeta) {
   if (!eventMeta) return '最新結果を待機中です。';
-  if (eventMeta.action === 'HEAL') return `${eventMeta.actor_name} が ${eventMeta.target_name || '味方'} を回復`;
-  if (!eventMeta.hit) return `${eventMeta.actor_name} の ${eventMeta.action} はミス`;
-  return `${eventMeta.actor_name} → ${eventMeta.target_name || '対象なし'} / ${eventMeta.action}`;
+  const actorName = eventMeta.actor_name || '送信元';
+  const targetName = eventMeta.target_name || '対象なし';
+  const actionName = eventMeta.action || '更新';
+  if (actionName === 'HEAL') return `${actorName} が ${targetName === '対象なし' ? '味方' : targetName} を回復`;
+  if (!eventMeta.hit) return `${actorName} の ${actionName} はミス`;
+  return `${actorName} → ${targetName} / ${actionName}`;
 }
 
 function updatePreviewMeta(s, eventMeta = null) {
@@ -1621,12 +1647,14 @@ function appendHistoryEntry(s, eventMeta = null) {
 
   const entry = document.createElement('div');
   entry.className = 'history-entry';
+  const entryId = lastHistoryId + 1;
+  lastHistoryId = entryId;
 
   const title = document.createElement('strong');
-  title.textContent = `#${++lastHistoryId} · Tick ${s.tick}`;
+  title.textContent = `#${entryId} · Tick ${s.tick}`;
 
   const phaseLine = document.createElement('span');
-  phaseLine.textContent = generationPhase === GENERATION_PHASES.COOLDOWN ? 'Cooldown sync complete' : 'State synced';
+  phaseLine.textContent = historyPhaseLabel(generationPhase);
 
   const body = document.createElement('span');
   body.textContent = describeEvent(eventMeta);
@@ -1934,6 +1962,7 @@ async function playEventSequence(eventMeta) {
 
 async function doStep() {
   if (isGenerating || state.is_finished) return;
+  isGenerating = true;
   startGenerationPhase();
   try {
     const response = await fetch(STEP_URL);
