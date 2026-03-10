@@ -44,6 +44,7 @@ from .services.engine_logic import (
     BattleEngine,
     BattleState,
     TimelinePhase,
+    VALID_ACTION_PART_KEYS,
     build_state_from_db,
     state_from_json,
     state_to_json,
@@ -87,6 +88,9 @@ def _create_demo_medarot(
     medal_name: str,
     personality: str,
     color_prefix: str = "",
+    *,
+    leg_charge: int = 55,
+    leg_cooldown: int = 50,
 ) -> Medarot:
     """Build a demo Medarot with balanced stats for ~10–20 action rounds."""
     medal = Medal.objects.create(
@@ -126,8 +130,8 @@ def _create_demo_medarot(
         PartSystem.LEG,
         SkillKind.NONE,
         armor=80,
-        charge=55,
-        cooldown=50,
+        charge=leg_charge,
+        cooldown=leg_cooldown,
     )
     return Medarot.objects.create(
         name=name,
@@ -142,9 +146,15 @@ def _create_demo_medarot(
 def _build_demo_teams() -> tuple[Team, Team]:
     """Create two balanced demo teams for a sample battle."""
     # Team A
-    a1 = _create_demo_medarot("メタビー", "メタビーのメダル", Personality.LEADER, "赤-")
-    a2 = _create_demo_medarot("ロクショウ", "ロクショウのメダル", Personality.WEAK, "緑-")
-    a3 = _create_demo_medarot("イカロス", "イカロスのメダル", Personality.RANDOM, "青-")
+    a1 = _create_demo_medarot(
+        "メタビー", "メタビーのメダル", Personality.LEADER, "赤-", leg_charge=42, leg_cooldown=60
+    )
+    a2 = _create_demo_medarot(
+        "ロクショウ", "ロクショウのメダル", Personality.WEAK, "緑-", leg_charge=58, leg_cooldown=44
+    )
+    a3 = _create_demo_medarot(
+        "イカロス", "イカロスのメダル", Personality.RANDOM, "青-", leg_charge=49, leg_cooldown=54
+    )
 
     team_a = Team.objects.create(
         name="チームA",
@@ -155,9 +165,15 @@ def _build_demo_teams() -> tuple[Team, Team]:
     )
 
     # Team B (slightly varied personalities)
-    b1 = _create_demo_medarot("スパルタン", "スパルタンのメダル", Personality.STRONG, "金-")
-    b2 = _create_demo_medarot("ティグリス", "ティグリスのメダル", Personality.RANDOM, "黒-")
-    b3 = _create_demo_medarot("クロスファイア", "クロスファイアのメダル", Personality.LEADER, "白-")
+    b1 = _create_demo_medarot(
+        "スパルタン", "スパルタンのメダル", Personality.STRONG, "金-", leg_charge=40, leg_cooldown=63
+    )
+    b2 = _create_demo_medarot(
+        "ティグリス", "ティグリスのメダル", Personality.RANDOM, "黒-", leg_charge=56, leg_cooldown=46
+    )
+    b3 = _create_demo_medarot(
+        "クロスファイア", "クロスファイアのメダル", Personality.LEADER, "白-", leg_charge=47, leg_cooldown=57
+    )
 
     team_b = Team.objects.create(
         name="チームB",
@@ -239,6 +255,58 @@ def _state_to_dict(state: BattleState) -> dict[str, Any]:
         "event_stack": [],
         "is_finished": state.is_finished,
         "winner": state.winner,
+    }
+
+
+def _player_command_payload(state: BattleState, awaiting_player_action: bool = False) -> dict[str, Any]:
+    """Describe the current player-controlled command window for the UI."""
+    active_unit = next(
+        (unit for unit in state.team_a.units if unit.phase == TimelinePhase.ACT and unit.is_alive),
+        None,
+    )
+    if active_unit is None:
+        return {
+            "awaiting_player_action": False,
+            "player_command": None,
+        }
+
+    actions = []
+    for key, label in (
+        ("head", "頭部"),
+        ("ra", "右腕"),
+        ("la", "左腕"),
+        ("leg", "脚部"),
+    ):
+        part = getattr(active_unit, f"part_{key}")
+        actions.append(
+            {
+                "key": key,
+                "label": label,
+                "part_name": part.name,
+                "skill_kind": part.skill_kind.value,
+                "enabled": part.is_usable and part.skill_kind != SkillKind.NONE,
+            }
+        )
+
+    return {
+        "awaiting_player_action": awaiting_player_action,
+        "player_command": {
+            "unit_id": active_unit.medarot_id,
+            "unit_name": active_unit.name,
+            "actions": actions,
+        },
+    }
+
+
+def _state_response_payload(
+    state: BattleState,
+    *,
+    awaiting_player_action: bool = False,
+) -> dict[str, Any]:
+    """Build the full JSON payload returned to the front-end."""
+    return {
+        **_state_to_dict(state),
+        **_player_command_payload(state, awaiting_player_action=awaiting_player_action),
     }
 
 
@@ -358,7 +426,7 @@ def battle_field(request: HttpRequest) -> HttpResponse:
     state = state_from_json(session.state_json)
     context = {
         "session_id": session.pk,
-        "initial_state": json.dumps(_state_to_dict(state)),
+        "initial_state": json.dumps(_state_response_payload(state)),
     }
     return render(request, "battle/battle_field.html", context)
 
@@ -368,7 +436,7 @@ def battle_state(request: HttpRequest, session_id: int) -> JsonResponse:
     """Return the current battle state as JSON without advancing the battle."""
     session = get_object_or_404(BattleSession, pk=session_id)
     state = state_from_json(session.state_json)
-    return JsonResponse(_state_to_dict(state))
+    return JsonResponse(_state_response_payload(state))
 
 
 @require_http_methods(["GET"])
@@ -382,12 +450,19 @@ def battle_step(request: HttpRequest, session_id: int) -> JsonResponse:
 
     if session.is_finished:
         state = state_from_json(session.state_json)
-        return JsonResponse({**_state_to_dict(state), "already_finished": True})
+        return JsonResponse({**_state_response_payload(state), "already_finished": True})
+
+    action_part = request.GET.get("action_part")
+    if action_part is not None and action_part not in VALID_ACTION_PART_KEYS:
+        return JsonResponse({"error": "invalid action_part"}, status=400)
 
     previous_state = state_from_json(session.state_json)
     state = state_from_json(session.state_json)
     engine = BattleEngine(state)
-    updated_state, new_events = engine.advance()
+    updated_state, new_events = engine.advance(
+        player_team="A",
+        action_part_key=action_part,
+    )
 
     # Persist the updated state
     session.state_json = state_to_json(updated_state)
@@ -396,7 +471,10 @@ def battle_step(request: HttpRequest, session_id: int) -> JsonResponse:
         session.winner = updated_state.winner
     session.save()
 
-    response_data = _state_to_dict(updated_state)
+    response_data = _state_response_payload(
+        updated_state,
+        awaiting_player_action=engine.awaiting_player_action,
+    )
     response_data["new_events"] = [e.model_dump() for e in new_events]
     response_data["event_stack"] = _build_event_stack(previous_state, updated_state, new_events)
     return JsonResponse(response_data)

@@ -100,6 +100,9 @@ class TimelinePhase(str, Enum):
     CLR = "CLR"
 
 
+VALID_ACTION_PART_KEYS = frozenset({"head", "ra", "la", "leg"})
+
+
 # ---------------------------------------------------------------------------
 # Pydantic data models
 # ---------------------------------------------------------------------------
@@ -228,11 +231,23 @@ class MedarotState(BaseModel):
         arms = [self.part_ra, self.part_la]
         return [p for p in arms if p.is_usable and p.skill_kind != SkillKind.NONE]
 
-    def choose_action_part(self) -> PartState | None:
+    def action_part_for_slot(self, slot_key: str | None) -> PartState | None:
+        """Return the action part mapped to a UI slot key if it is usable."""
+        if slot_key not in VALID_ACTION_PART_KEYS:
+            return None
+        part = getattr(self, f"part_{slot_key}")
+        if not part.is_usable or part.skill_kind == SkillKind.NONE:
+            return None
+        return part
+
+    def choose_action_part(self, preferred_slot: str | None = None) -> PartState | None:
         """Pick which part acts this turn (HEAD > arms > None).
 
         Priority: HEAD if usable, then a random usable arm.
         """
+        preferred = self.action_part_for_slot(preferred_slot)
+        if preferred is not None:
+            return preferred
         if self.part_head.is_usable and self.part_head.skill_kind != SkillKind.NONE:
             return self.part_head
         arms = self.usable_arm_parts()
@@ -474,12 +489,18 @@ class BattleEngine:
     def __init__(self, state: BattleState) -> None:
         self.state = state
         self._selector = TargetSelector()
+        self.awaiting_player_action = False
 
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
 
-    def advance(self) -> tuple[BattleState, list[BattleEvent]]:
+    def advance(
+        self,
+        *,
+        player_team: str | None = None,
+        action_part_key: str | None = None,
+    ) -> tuple[BattleState, list[BattleEvent]]:
         """Advance the battle until one unit takes an action.
 
         Returns
@@ -487,13 +508,24 @@ class BattleEngine:
         (updated_state, new_events)
         """
         new_events: list[BattleEvent] = []
+        self.awaiting_player_action = False
 
         if self.state.is_finished:
             return self.state, new_events
 
         actor, actor_team_label = self._pop_ready_unit()
         if actor is not None:
-            new_events.extend(self._execute_action(actor, actor_team_label))
+            if self._should_wait_for_player(actor, actor_team_label, player_team, action_part_key):
+                self.awaiting_player_action = True
+                self._push_ready_unit(actor)
+                return self.state, new_events
+            new_events.extend(
+                self._execute_action(
+                    actor,
+                    actor_team_label,
+                    action_part_key=action_part_key if actor_team_label == player_team else None,
+                )
+            )
             result = self._check_victory()
             if result:
                 self.state.is_finished = True
@@ -510,7 +542,15 @@ class BattleEngine:
 
             actor, actor_team_label = self._pop_ready_unit()
             if actor is not None:
-                events = self._execute_action(actor, actor_team_label)
+                if self._should_wait_for_player(actor, actor_team_label, player_team, action_part_key):
+                    self.awaiting_player_action = True
+                    self._push_ready_unit(actor)
+                    break
+                events = self._execute_action(
+                    actor,
+                    actor_team_label,
+                    action_part_key=action_part_key if actor_team_label == player_team else None,
+                )
                 new_events.extend(events)
 
                 # Check for battle-over conditions
@@ -574,7 +614,10 @@ class BattleEngine:
         return None, ""
 
     def _execute_action(
-        self, actor: MedarotState, actor_team_label: str
+        self,
+        actor: MedarotState,
+        actor_team_label: str,
+        action_part_key: str | None = None,
     ) -> list[BattleEvent]:
         """Resolve the actor's chosen action and return narration events."""
         events: list[BattleEvent] = []
@@ -583,7 +626,7 @@ class BattleEngine:
         actor.gauge = self.COMMAND_LINE
         actor.phase = TimelinePhase.CLR
 
-        acting_part = actor.choose_action_part()
+        acting_part = actor.choose_action_part(action_part_key)
         if acting_part is None:
             events.append(
                 BattleEvent(
@@ -730,6 +773,20 @@ class BattleEngine:
         events.extend(dot_events)
 
         return events
+
+    @staticmethod
+    def _should_wait_for_player(
+        actor: MedarotState,
+        actor_team_label: str,
+        player_team: str | None,
+        action_part_key: str | None,
+    ) -> bool:
+        """Return True when a player-controlled unit is ready but has not chosen a command."""
+        if player_team is None or actor_team_label != player_team:
+            return False
+        if action_part_key is None:
+            return True
+        return actor.action_part_for_slot(action_part_key) is None
 
     def _cooling_start_event(
         self,
