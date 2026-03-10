@@ -42,11 +42,37 @@
     }
 
     #app {
-      display: flex;
-      flex-direction: column;
       min-height: 100vh;
       padding: 12px;
-      gap: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    #workspace {
+      display: grid;
+      grid-template-columns: minmax(250px, 280px) minmax(220px, 260px) minmax(520px, 1fr);
+      gap: 16px;
+      align-items: start;
+      justify-content: space-between;
+      flex: 1;
+      min-width: 0;
+    }
+
+    #left-zone,
+    #center-zone,
+    #right-zone {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    #left-zone,
+    #center-zone {
+      position: sticky;
+      top: 12px;
+      align-self: start;
     }
 
     h1 {
@@ -57,6 +83,7 @@
       text-shadow: 0 0 18px rgba(251, 191, 36, .35);
     }
 
+    .zone-card,
     #timeline-section,
     .team-panel,
     #event-log {
@@ -66,12 +93,17 @@
       box-shadow: 0 20px 30px rgba(0, 0, 0, .18);
     }
 
+    .zone-card {
+      padding: 12px 14px;
+    }
+
     #timeline-section {
       padding: 10px 14px;
     }
 
     #timeline-section h2,
-    #event-log h2 {
+    #event-log h2,
+    .zone-card h2 {
       font-size: .72rem;
       text-transform: uppercase;
       letter-spacing: .14em;
@@ -83,6 +115,166 @@
       width: 100%;
       height: 68px;
       display: block;
+    }
+
+    #timeline-caption {
+      margin-top: 6px;
+      color: var(--text-dim);
+      font-size: .72rem;
+      letter-spacing: .05em;
+    }
+
+    #settings-pane,
+    #state-diagram-panel,
+    #request-status-card,
+    #result-preview,
+    #history-gallery {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .field-stack,
+    .field-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .field-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .field-label,
+    .field-stack label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: .72rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    textarea,
+    select,
+    input[type="text"],
+    input[type="number"] {
+      width: 100%;
+      border: 1px solid rgba(100, 116, 139, .34);
+      border-radius: 10px;
+      background: rgba(15, 23, 42, .82);
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+      resize: vertical;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--gold);
+    }
+
+    .field-inline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    .field-hint {
+      color: var(--text-dim);
+      font-size: .76rem;
+      line-height: 1.5;
+    }
+
+    .diagram-hint {
+      color: var(--text-dim);
+      font-size: .72rem;
+      line-height: 1.5;
+    }
+
+    #state-diagram {
+      margin: 0;
+      padding: 12px;
+      border-radius: 10px;
+      background: rgba(2, 6, 23, .9);
+      border: 1px solid rgba(56, 189, 248, .24);
+      color: #bfdbfe;
+      font-size: .75rem;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    #request-status-card {
+      align-items: center;
+      text-align: center;
+      min-height: 280px;
+      justify-content: center;
+    }
+
+    #phase-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 136px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: .74rem;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      background: rgba(56, 189, 248, .12);
+      color: #bae6fd;
+      border: 1px solid rgba(56, 189, 248, .22);
+    }
+
+    #phase-chip[data-phase="active"] {
+      background: rgba(251, 191, 36, .12);
+      color: #fde68a;
+      border-color: rgba(251, 191, 36, .32);
+    }
+
+    #phase-chip[data-phase="cooldown"] {
+      background: rgba(34, 197, 94, .12);
+      color: #bbf7d0;
+      border-color: rgba(34, 197, 94, .28);
+    }
+
+    #phase-status {
+      font-size: 1.18rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      color: var(--gold);
+    }
+
+    #phase-helper {
+      color: var(--text-dim);
+      line-height: 1.6;
+      max-width: 28ch;
+    }
+
+    #phase-track {
+      width: min(100%, 280px);
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(30, 58, 95, .92);
+      box-shadow: inset 0 0 0 1px rgba(100, 116, 139, .2);
+    }
+
+    #phase-progress {
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent-a), var(--gold));
+      transition: width .24s linear, background .24s ease;
+    }
+
+    body[data-phase="cooldown"] #phase-progress {
+      background: linear-gradient(90deg, var(--green), var(--accent-a));
     }
 
     #battlefield-shell {
@@ -379,11 +571,70 @@
     #status-banner.win-a { color: var(--accent-a); }
     #status-banner.win-b { color: var(--accent-b); }
 
+    #result-preview-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    #current-preview-meta {
+      display: grid;
+      gap: 4px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, .76);
+      border: 1px solid rgba(100, 116, 139, .2);
+      color: var(--text-dim);
+      font-size: .78rem;
+      line-height: 1.5;
+    }
+
+    #current-preview-meta strong {
+      color: var(--text);
+      font-size: .86rem;
+    }
+
+    #history-entries {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .history-entry,
+    .history-empty {
+      border-radius: 10px;
+      border: 1px solid rgba(100, 116, 139, .2);
+      background: rgba(15, 23, 42, .72);
+      padding: 10px 12px;
+    }
+
+    .history-entry strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--text);
+      font-size: .82rem;
+    }
+
+    .history-entry span {
+      display: block;
+      color: var(--text-dim);
+      font-size: .72rem;
+      line-height: 1.45;
+    }
+
+    .history-empty {
+      color: var(--text-dim);
+      font-size: .74rem;
+    }
+
     #event-log {
       padding: 8px 12px;
-      max-height: 128px;
+      max-height: 220px;
       overflow-y: auto;
-      opacity: .62;
+      opacity: .96;
     }
 
     #log-entries {
@@ -409,8 +660,10 @@
     #controls {
       display: flex;
       justify-content: center;
+      align-items: stretch;
+      flex-direction: column;
       gap: 12px;
-      flex-wrap: wrap;
+      width: 100%;
     }
 
     .btn {
@@ -425,6 +678,12 @@
 
     .btn:hover { filter: brightness(1.12); }
     .btn:active { transform: scale(.96); }
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: .55;
+      filter: none;
+      transform: none;
+    }
     .btn-primary { background: var(--accent-a); color: #04111d; }
     .btn-danger  { background: var(--accent-b); color: #fff; }
     .btn-neutral { background: #334155; color: var(--text); }
@@ -760,12 +1019,39 @@
       100% { stroke-dashoffset: -18; }
     }
 
+    @media (max-width: 1180px) {
+      #workspace {
+        grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+      }
+
+      #left-zone,
+      #center-zone {
+        position: static;
+      }
+
+      #center-zone,
+      #right-zone {
+        grid-column: 1 / -1;
+      }
+    }
+
     @media (max-width: 900px) {
+      #workspace {
+        grid-template-columns: 1fr;
+      }
+
+      #left-zone,
+      #center-zone,
+      #right-zone {
+        position: static;
+      }
+
       #battlefield { flex-direction: column; }
       #vs-column { width: auto; }
       #vs-text { writing-mode: horizontal-tb; }
       #reveal-popup { width: min(92vw, 360px); }
       .focus-unit { width: 150px; }
+      .field-grid { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 520px) {
@@ -784,63 +1070,143 @@
 <div id="app">
   <h1>⚙ 3vs3 タクティカル・シミュレーター ⚙</h1>
 
-  <section id="timeline-section">
-    <h2>▶ タイムライン</h2>
-    <svg id="timeline-svg" viewBox="0 0 900 60" preserveAspectRatio="xMidYMid meet">
-      <rect x="20" y="28" width="860" height="4" rx="2" fill="#1e3a5f"></rect>
-      <line x1="20" y1="10" x2="20" y2="50" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 2"></line>
-      <text x="6" y="14" fill="#94a3b8" font-size="9" font-family="sans-serif">BL</text>
-      <line x1="880" y1="10" x2="880" y2="50" stroke="#fbbf24" stroke-width="2" stroke-dasharray="4 2"></line>
-      <text x="882" y="14" fill="#fbbf24" font-size="9" font-family="sans-serif">CL</text>
-      <text x="56" y="16" fill="#64748b" font-size="9" font-family="sans-serif">CHG → ACT → CLR ↩</text>
-      <g id="tl-icons"></g>
-    </svg>
-  </section>
+  <div id="workspace">
+    <aside id="left-zone">
+      <section class="zone-card" id="settings-pane">
+        <h2>⚙ 設定ペイン</h2>
+        <label class="field-label" for="prompt-input">
+          Prompt
+          <textarea id="prompt-input" rows="6">masterpiece, cinematic mecha illustration, centered composition, crisp lighting, volumetric effects</textarea>
+        </label>
+        <div class="field-grid">
+          <label for="model-select">
+            Model
+            <select id="model-select">
+              <option>nai-diffusion-4-curated-preview</option>
+              <option>nai-diffusion-3</option>
+            </select>
+          </label>
+          <label for="sampler-select">
+            Sampler
+            <select id="sampler-select">
+              <option>k_euler_ancestral</option>
+              <option>dpmpp_2m</option>
+            </select>
+          </label>
+        </div>
+        <div class="field-grid">
+          <label for="steps-input">
+            Steps
+            <input id="steps-input" type="range" min="20" max="50" value="28">
+          </label>
+          <label for="scale-input">
+            Scale
+            <input id="scale-input" type="number" min="1" max="15" value="7">
+          </label>
+        </div>
+        <div class="field-inline">
+          <span>Current Steps</span>
+          <strong id="steps-value">28</strong>
+        </div>
+        <p class="field-hint">左ペインは固定し、中央の Generate から非同期通信を開始してもレイアウトが崩れないように構成しています。</p>
+      </section>
 
-  <div id="battlefield-shell">
-    <div id="battlefield">
-      <div class="team-panel team-a" id="panel-a">
-        <div class="team-title" id="name-a">チームA</div>
-      </div>
+      <section class="zone-card" id="state-diagram-panel">
+        <h2>🧭 状態遷移図</h2>
+        <pre id="state-diagram" aria-label="Mermaid state diagram">stateDiagram-v2
+[*] --> Ready
+Ready --> Active: Generate / isGenerating = true
+Active --> Cooldown: response received / render result
+Active --> Ready: request error / unlock UI
+Cooldown --> Ready: timeline reset / isGenerating = false</pre>
+        <p class="diagram-hint">Mermaid 形式の状態遷移定義をそのまま表示し、実装ロジックの確認用として扱えるようにしています。</p>
+      </section>
+    </aside>
 
-      <div id="vs-column"><span id="vs-text">VS</span></div>
+    <main id="center-zone">
+      <section id="timeline-section">
+        <h2>▶ アクション＆タイムライン</h2>
+        <svg id="timeline-svg" viewBox="0 0 900 60" preserveAspectRatio="xMidYMid meet">
+          <rect x="20" y="28" width="860" height="4" rx="2" fill="#1e3a5f"></rect>
+          <line x1="20" y1="10" x2="20" y2="50" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 2"></line>
+          <text x="6" y="14" fill="#94a3b8" font-size="9" font-family="sans-serif">BL</text>
+          <line x1="880" y1="10" x2="880" y2="50" stroke="#fbbf24" stroke-width="2" stroke-dasharray="4 2"></line>
+          <text x="882" y="14" fill="#fbbf24" font-size="9" font-family="sans-serif">CL</text>
+          <text x="56" y="16" fill="#64748b" font-size="9" font-family="sans-serif">CHG / Ready → ACT / Active → CLR / Cooldown</text>
+          <g id="tl-icons"></g>
+        </svg>
+        <p id="timeline-caption">API通信の進捗は中央ラインで可視化し、描画完了後にスムーズにリセットします。</p>
+      </section>
 
-      <div class="team-panel team-b" id="panel-b">
-        <div class="team-title" id="name-b">チームB</div>
-      </div>
-    </div>
+      <section class="zone-card" id="request-status-card">
+        <h2>🚀 Generate Hub</h2>
+        <div id="phase-chip" data-phase="ready">Ready Phase</div>
+        <div id="phase-status">入力待機中</div>
+        <p id="phase-helper">プロンプトとパラメータを調整し、Generate で次の結果を取得します。</p>
+        <div id="phase-track" aria-hidden="true">
+          <div id="phase-progress"></div>
+        </div>
+        <div id="controls">
+          <button class="btn btn-primary" id="btn-generate">Generate</button>
+          <button class="btn btn-neutral" id="btn-auto">▶ 自動進行 ON</button>
+          <button class="btn btn-danger" id="btn-reset">↺ リセット</button>
+        </div>
+      </section>
+    </main>
 
-    <div id="cinematic-layer" aria-live="polite">
-      <div id="cinematic-dimmer"></div>
-      <svg id="target-line-layer" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <defs>
-          <marker id="target-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24"></path>
-          </marker>
-        </defs>
-        <line id="target-line" marker-end="url(#target-arrow)" x1="26" y1="54" x2="74" y2="44"></line>
-      </svg>
-      <div class="focus-unit actor" id="focus-actor"></div>
-      <div class="focus-unit target" id="focus-target"></div>
-      <div id="declaration-banner"></div>
-      <div id="impact-flash"></div>
-      <div id="damage-number"></div>
-      <div id="reveal-popup"></div>
-      <div id="destroy-warning">PART DESTROYED!</div>
-    </div>
-  </div>
+    <aside id="right-zone">
+      <section class="zone-card" id="result-preview">
+        <div id="result-preview-header">
+          <h2>🖼 結果・プレビュー</h2>
+          <div id="status-banner"></div>
+        </div>
+        <div id="current-preview-meta">最新の生成結果はここに同期されます。</div>
+        <div id="battlefield-shell">
+          <div id="battlefield">
+            <div class="team-panel team-a" id="panel-a">
+              <div class="team-title" id="name-a">チームA</div>
+            </div>
 
-  <div id="status-banner"></div>
+            <div id="vs-column"><span id="vs-text">VS</span></div>
 
-  <section id="event-log">
-    <h2>📜 バトルログ</h2>
-    <div id="log-entries"></div>
-  </section>
+            <div class="team-panel team-b" id="panel-b">
+              <div class="team-title" id="name-b">チームB</div>
+            </div>
+          </div>
 
-  <div id="controls">
-    <button class="btn btn-primary" id="btn-auto">▶ 自動進行 ON</button>
-    <button class="btn btn-neutral" id="btn-step">⏭ 1ステップ</button>
-    <button class="btn btn-danger" id="btn-reset">↺ リセット</button>
+          <div id="cinematic-layer" aria-live="polite">
+            <div id="cinematic-dimmer"></div>
+            <svg id="target-line-layer" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <defs>
+                <marker id="target-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24"></path>
+                </marker>
+              </defs>
+              <line id="target-line" marker-end="url(#target-arrow)" x1="26" y1="54" x2="74" y2="44"></line>
+            </svg>
+            <div class="focus-unit actor" id="focus-actor"></div>
+            <div class="focus-unit target" id="focus-target"></div>
+            <div id="declaration-banner"></div>
+            <div id="impact-flash"></div>
+            <div id="damage-number"></div>
+            <div id="reveal-popup"></div>
+            <div id="destroy-warning">PART DESTROYED!</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="zone-card" id="history-gallery">
+        <h2>🗂 履歴ギャラリー</h2>
+        <div id="history-entries">
+          <div class="history-empty">まだ結果履歴はありません。Generate 後にここへ蓄積されます。</div>
+        </div>
+      </section>
+
+      <section id="event-log">
+        <h2>📜 履歴ログ</h2>
+        <div id="log-entries"></div>
+      </section>
+    </aside>
   </div>
 </div>
 
@@ -857,12 +1223,29 @@ const PHASE_TIMINGS = {
   impact: 980,
   destroy: 700,
 };
+const GENERATION_PHASES = Object.freeze({
+  READY: 'ready',
+  ACTIVE: 'active',
+  COOLDOWN: 'cooldown',
+});
+// Cap the simulated network progress below 100% so the final response can visibly complete the bar.
+const MAX_SIMULATED_PROGRESS = 88;
+// Small fixed increments keep the bar moving without racing to the completion state too early.
+const PROGRESS_INCREMENT_STEP = 6;
+// Update often enough to feel live while avoiding overly busy redraws.
+const PROGRESS_UPDATE_INTERVAL_MS = 180;
+// A short cooldown keeps the completion state visible before resetting back to Ready.
+const COOLDOWN_DURATION_MS = 720;
 
 let state = {{ initial_state|safe }};
 let autoPlay = false;
 let autoTimer = null;
-let stepping = false;
 let firstRender = true;
+let isGenerating = false;
+let generationPhase = GENERATION_PHASES.READY;
+let progressTimer = null;
+let cooldownTimer = null;
+let lastHistoryId = 0;
 
 const HP_COLORS = [
   [.5, '#22c55e'],
@@ -879,6 +1262,102 @@ function hpColor(pct) {
 
 function sleep(ms) {
   return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
+function clearProgressTimer() {
+  if (progressTimer) {
+    window.clearInterval(progressTimer);
+    progressTimer = null;
+  }
+}
+
+function clearCooldownTimer() {
+  if (cooldownTimer) {
+    window.clearTimeout(cooldownTimer);
+    cooldownTimer = null;
+  }
+}
+
+function setProgress(value) {
+  document.getElementById('phase-progress').style.width = `${Math.max(0, Math.min(100, value))}%`;
+}
+
+function historyPhaseLabel(phase) {
+  return {
+    [GENERATION_PHASES.READY]: 'Ready Phase restored',
+    [GENERATION_PHASES.ACTIVE]: 'Active Phase snapshot',
+    [GENERATION_PHASES.COOLDOWN]: 'Cooldown Phase complete',
+  }[phase] || 'State synced';
+}
+
+function syncActionControls() {
+  document.getElementById('btn-generate').disabled = isGenerating || state.is_finished;
+  document.getElementById('btn-auto').disabled = isGenerating && !autoPlay;
+  document.getElementById('btn-reset').disabled = isGenerating;
+}
+
+function setGenerationPhase(phase, phaseStatusText, helperText, progress = null) {
+  generationPhase = phase;
+  document.body.dataset.phase = phase;
+  const chip = document.getElementById('phase-chip');
+  chip.dataset.phase = phase;
+  chip.textContent = phase === GENERATION_PHASES.ACTIVE
+    ? 'Active Phase'
+    : phase === GENERATION_PHASES.COOLDOWN
+      ? 'Cooldown Phase'
+      : 'Ready Phase';
+  document.getElementById('phase-status').textContent = phaseStatusText;
+  document.getElementById('phase-helper').textContent = helperText;
+  if (progress !== null) setProgress(progress);
+  syncActionControls();
+}
+
+function startGenerationPhase() {
+  clearCooldownTimer();
+  clearProgressTimer();
+  let progress = 12;
+  setGenerationPhase(
+    GENERATION_PHASES.ACTIVE,
+    'API通信中',
+    'UIをフリーズさせず、中央ラインで進捗を可視化しています。',
+    progress,
+  );
+  progressTimer = window.setInterval(() => {
+    progress = Math.min(MAX_SIMULATED_PROGRESS, progress + PROGRESS_INCREMENT_STEP);
+    setProgress(progress);
+  }, PROGRESS_UPDATE_INTERVAL_MS);
+}
+
+function finishGenerationPhase(summaryText) {
+  clearProgressTimer();
+  setGenerationPhase(
+    GENERATION_PHASES.COOLDOWN,
+    '描画完了',
+    summaryText || '結果を右ペインへ反映し、タイムラインをリセットしています。',
+    100,
+  );
+  clearCooldownTimer();
+  cooldownTimer = window.setTimeout(() => {
+    isGenerating = false;
+    setGenerationPhase(
+      GENERATION_PHASES.READY,
+      '入力待機中',
+      '次の Generate に備えてタイムラインをリセットしました。',
+      0,
+    );
+  }, COOLDOWN_DURATION_MS);
+}
+
+function resetGenerationPhase(message) {
+  clearProgressTimer();
+  clearCooldownTimer();
+  isGenerating = false;
+  setGenerationPhase(
+    GENERATION_PHASES.READY,
+    '入力待機中',
+    message || 'Generate を押すと非同期処理を開始します。',
+    0,
+  );
 }
 
 function hasValue(value) {
@@ -1137,6 +1616,54 @@ function appendEvents(events) {
   while (log.children.length > 60) log.removeChild(log.lastChild);
 }
 
+function describeEvent(eventMeta) {
+  if (!eventMeta) return '最新結果を待機中です。';
+  const actorName = eventMeta.actor_name || '送信元';
+  const targetName = eventMeta.target_name || '対象なし';
+  const actionName = eventMeta.action || '更新';
+  if (actionName === 'HEAL') return `${actorName} が ${targetName === '対象なし' ? '味方' : targetName} を回復`;
+  if (!eventMeta.hit) return `${actorName} の ${actionName} はミス`;
+  return `${actorName} → ${targetName} / ${actionName}`;
+}
+
+function updatePreviewMeta(s, eventMeta = null) {
+  const latestEvent = eventMeta || (s.events && s.events.length ? s.events[s.events.length - 1] : null);
+  const phaseLabel = generationPhase.charAt(0).toUpperCase() + generationPhase.slice(1);
+  const meta = document.getElementById('current-preview-meta');
+  meta.textContent = '';
+  const title = document.createElement('strong');
+  title.textContent = `Tick ${s.tick}`;
+  const phase = document.createElement('span');
+  phase.textContent = `Phase: ${phaseLabel}`;
+  const detail = document.createElement('span');
+  detail.textContent = describeEvent(latestEvent);
+  meta.append(title, phase, detail);
+}
+
+function appendHistoryEntry(s, eventMeta = null) {
+  const history = document.getElementById('history-entries');
+  const empty = history.querySelector('.history-empty');
+  if (empty) empty.remove();
+
+  const entry = document.createElement('div');
+  entry.className = 'history-entry';
+  const entryId = lastHistoryId + 1;
+  lastHistoryId = entryId;
+
+  const title = document.createElement('strong');
+  title.textContent = `#${entryId} · Tick ${s.tick}`;
+
+  const phaseLine = document.createElement('span');
+  phaseLine.textContent = historyPhaseLabel(generationPhase);
+
+  const body = document.createElement('span');
+  body.textContent = describeEvent(eventMeta);
+
+  entry.append(title, phaseLine, body);
+  history.prepend(entry);
+  while (history.children.length > 8) history.removeChild(history.lastChild);
+}
+
 function triggerBaseCardAnimations(events, s) {
   const allUnits = [...s.team_a.units, ...s.team_b.units];
   events.forEach(ev => {
@@ -1195,6 +1722,8 @@ function renderState(s) {
   }
   renderTimeline(s);
   updateBanner(s);
+  updatePreviewMeta(s);
+  syncActionControls();
 }
 
 function resetCardFocus() {
@@ -1432,8 +1961,9 @@ async function playEventSequence(eventMeta) {
 }
 
 async function doStep() {
-  if (stepping || state.is_finished) return;
-  stepping = true;
+  if (isGenerating || state.is_finished) return;
+  isGenerating = true;
+  startGenerationPhase();
   try {
     const response = await fetch(STEP_URL);
     const data = await response.json();
@@ -1445,10 +1975,12 @@ async function doStep() {
     }
     triggerBaseCardAnimations(data.new_events || [], state);
     appendEvents(data.new_events || []);
+    finishGenerationPhase(describeEvent(primaryEvent));
+    updatePreviewMeta(state, primaryEvent);
+    appendHistoryEntry(state, primaryEvent);
   } catch (error) {
     console.error('Step failed:', error);
-  } finally {
-    stepping = false;
+    resetGenerationPhase('通信に失敗したため Ready Phase に戻しました。');
   }
 }
 
@@ -1476,6 +2008,7 @@ function stopAuto() {
 
 async function doReset() {
   stopAuto();
+  resetGenerationPhase('新しいセッションを準備しています。');
   try {
     const response = await fetch(NEW_URL, {method: 'POST'});
     const data = await response.json();
@@ -1488,10 +2021,14 @@ async function doReset() {
 document.getElementById('btn-auto').addEventListener('click', () => {
   if (autoPlay) stopAuto(); else startAuto();
 });
-document.getElementById('btn-step').addEventListener('click', doStep);
+document.getElementById('btn-generate').addEventListener('click', doStep);
 document.getElementById('btn-reset').addEventListener('click', doReset);
+document.getElementById('steps-input').addEventListener('input', (event) => {
+  document.getElementById('steps-value').textContent = event.target.value;
+});
 
 renderState(state);
+resetGenerationPhase('Generate を押すと Ready → Active → Cooldown の順に進みます。');
 if (state.events && state.events.length) appendEvents(state.events);
 </script>
 </body>

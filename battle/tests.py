@@ -497,6 +497,14 @@ class APIViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "メダロット")
 
+    def test_home_page_exposes_three_zone_generation_ui(self) -> None:
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "設定ペイン")
+        self.assertContains(resp, "Generate")
+        self.assertContains(resp, "履歴ギャラリー")
+        self.assertContains(resp, "stateDiagram-v2")
+
     def test_new_battle_creates_session(self) -> None:
         resp = self.client.post("/api/battle/new/")
         self.assertEqual(resp.status_code, 200)
