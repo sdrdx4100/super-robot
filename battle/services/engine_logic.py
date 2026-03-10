@@ -272,7 +272,7 @@ class BattleEvent(BaseModel):
     action: str
     damage: float = 0.0
     hit: bool = True
-    is_critical: bool = False  # True when the damage roll was ≥ 1.05×
+    is_critical: bool = False  # True when the variance multiplier was ≥ 1.05
     special: str = ""
     part_destroyed: str = ""  # name of destroyed part, if any
     note: str = ""
