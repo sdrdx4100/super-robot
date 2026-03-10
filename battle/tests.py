@@ -189,7 +189,7 @@ class DamageCalculationTests(TestCase):
         hits = 0
         total_dmg = 0.0
         for _ in range(n):
-            dmg, hit = calculate_damage(actor, part, target)
+            dmg, hit, _crit = calculate_damage(actor, part, target)
             if hit:
                 hits += 1
                 total_dmg += dmg
@@ -199,7 +199,7 @@ class DamageCalculationTests(TestCase):
         actor  = _make_unit("Actor")
         target = _make_unit("Target")
         for _ in range(50):
-            dmg, hit = calculate_damage(actor, actor.part_head, target)
+            dmg, hit, _crit = calculate_damage(actor, actor.part_head, target)
             if hit:
                 self.assertGreater(dmg, 0)
 
@@ -214,13 +214,13 @@ class DamageCalculationTests(TestCase):
         target = _make_unit("Defender")
         # Force a hit with very high success
         actor.part_ra.attr.success = 999
-        dmg_pierce, hit = calculate_damage(actor, actor.part_ra, target)
+        dmg_pierce, hit, _crit = calculate_damage(actor, actor.part_ra, target)
         if hit:
             # Pierce damage should be >= non-pierce (armor reduction skipped)
             actor_no_pierce = _make_unit("AttackerNP")
             actor_no_pierce.part_ra.attr.power = 60
             actor_no_pierce.part_ra.attr.success = 999
-            dmg_normal, _ = calculate_damage(actor_no_pierce, actor_no_pierce.part_ra, target)
+            dmg_normal, _, _crit2 = calculate_damage(actor_no_pierce, actor_no_pierce.part_ra, target)
             self.assertGreaterEqual(dmg_pierce, dmg_normal * 0.9)  # within noise
 
     def test_miss_returns_zero_damage(self) -> None:
@@ -240,7 +240,7 @@ class DamageCalculationTests(TestCase):
         """Whenever hit==False, damage must be 0."""
         actor = _make_unit("Actor")
         for _ in range(100):
-            dmg, hit = calculate_damage(actor, actor.part_head, _make_unit("Target"))
+            dmg, hit, _crit = calculate_damage(actor, actor.part_head, _make_unit("Target"))
             if not hit:
                 self.assertEqual(dmg, 0.0)
 
@@ -253,12 +253,68 @@ class DamageCalculationTests(TestCase):
         original_uniform = random.uniform
         try:
             random.uniform = lambda a, b: 0 if b == 100 else 1.0
-            dmg, hit = calculate_damage(actor, actor.part_head, target)
+            dmg, hit, _crit = calculate_damage(actor, actor.part_head, target)
         finally:
             random.uniform = original_uniform
 
         self.assertTrue(hit)
+        # variance=1.0 → not critical (< 1.05), base_dmg = (60 + 5*1.5)*1.0 = 67.5
+        # final_dmg = max(1, 67.5 - 100/2) = 17.5, * 1.2 cooling bonus = 21.0
         self.assertEqual(dmg, 21.0)
+
+    def test_critical_hit_flag_and_bonus(self) -> None:
+        """When variance >= 1.05, is_critical is True and damage is boosted."""
+        actor = _make_unit("Actor")
+        actor.part_head.attr.success = 999
+        target = _make_unit("Target")
+
+        original_uniform = random.uniform
+        try:
+            # Force hit (first call b==100 → 0), force variance 1.08 (second call)
+            call_count = [0]
+            def fake_uniform(a, b):
+                call_count[0] += 1
+                if b == 100:
+                    return 0  # always hit
+                return 1.08  # critical variance
+            random.uniform = fake_uniform
+            dmg, hit, is_critical = calculate_damage(actor, actor.part_head, target)
+        finally:
+            random.uniform = original_uniform
+
+        self.assertTrue(hit)
+        self.assertTrue(is_critical)
+        # base_dmg = (60 + 7.5) * 1.08 = 72.9, final = max(1, 72.9 - 50) = 22.9
+        # critical: 22.9 * 1.5 = 34.35 → 34.4
+        self.assertEqual(dmg, 34.4)
+
+    def test_non_critical_hit_flag(self) -> None:
+        """When variance < 1.05, is_critical is False."""
+        actor = _make_unit("Actor")
+        actor.part_head.attr.success = 999
+        target = _make_unit("Target")
+
+        original_uniform = random.uniform
+        try:
+            random.uniform = lambda a, b: 0 if b == 100 else 1.0
+            _dmg, hit, is_critical = calculate_damage(actor, actor.part_head, target)
+        finally:
+            random.uniform = original_uniform
+
+        self.assertTrue(hit)
+        self.assertFalse(is_critical)
+
+    def test_miss_is_never_critical(self) -> None:
+        """A miss should never be flagged as critical."""
+        actor = _make_unit("Actor")
+        actor.part_head.attr.success = 0
+        target = _make_unit("Target")
+
+        for _ in range(50):
+            dmg, hit, is_critical = calculate_damage(actor, actor.part_head, target)
+            if not hit:
+                self.assertFalse(is_critical)
+                self.assertEqual(dmg, 0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -656,3 +712,34 @@ class ViewSerialisationTests(TestCase):
         self.assertEqual(stack[0]["hp_before"], 100)
         self.assertEqual(stack[0]["hp_after"], 64)
         self.assertTrue(stack[0]["show_parts_reveal"])
+
+    def test_build_event_stack_passes_is_critical(self) -> None:
+        actor = _make_unit("Actor", medarot_id=11)
+        target = _make_unit("Target", medarot_id=21)
+        previous_state = _make_battle(
+            _make_team("TeamA", 1, units=[actor, _make_unit("A2"), _make_unit("A3")]),
+            _make_team("TeamB", 2, units=[target, _make_unit("B2"), _make_unit("B3")]),
+        )
+        updated_state = _make_battle(
+            _make_team("TeamA", 1, units=[_make_unit("Actor", medarot_id=11), _make_unit("A2"), _make_unit("A3")]),
+            _make_team("TeamB", 2, units=[_make_unit("Target", medarot_id=21), _make_unit("B2"), _make_unit("B3")]),
+        )
+        stack = _build_event_stack(
+            previous_state,
+            updated_state,
+            [
+                BattleEvent(
+                    tick=5,
+                    actor_team="A",
+                    actor_name="Actor",
+                    part_name=actor.part_head.name,
+                    target_name="Target",
+                    action="SHOOT",
+                    damage=50,
+                    hit=True,
+                    is_critical=True,
+                )
+            ],
+        )
+        self.assertEqual(len(stack), 1)
+        self.assertTrue(stack[0]["is_critical"])

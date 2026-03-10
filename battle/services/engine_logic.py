@@ -272,6 +272,7 @@ class BattleEvent(BaseModel):
     action: str
     damage: float = 0.0
     hit: bool = True
+    is_critical: bool = False  # True when the variance multiplier was ≥ 1.05
     special: str = ""
     part_destroyed: str = ""  # name of destroyed part, if any
     note: str = ""
@@ -350,14 +351,17 @@ def calculate_damage(
     actor: MedarotState,
     acting_part: PartState,
     target: MedarotState,
-) -> tuple[float, bool]:
-    """Compute (final_damage, did_hit) for an attack action.
+) -> tuple[float, bool, bool]:
+    """Compute (final_damage, did_hit, is_critical) for an attack action.
 
     Formulae
     --------
     base_dmg  = (威力 + 熟練度 * 1.5) * uniform(0.9, 1.1)
     final_dmg = base_dmg - (target_armor / 2)
     hit_pct   = (成功 + 熟練度) / (target_evasion + target_leg_propulsion) * 100
+
+    A critical hit occurs when the random multiplier is ≥ 1.05.  Critical hits
+    deal 1.5× final damage.
 
     ``target_evasion`` is derived from the target's LEG part success stat.
     ``target_leg_propulsion`` is the target's LEG charge stat (leg speed).
@@ -370,7 +374,7 @@ def calculate_damage(
 
     Returns
     -------
-    (damage, hit) — damage is 0 when the attack misses.
+    (damage, hit, is_critical) — damage is 0 when the attack misses.
     """
     skill_level = actor.skill_for(acting_part.system)
     target_is_cooling = target.phase == TimelinePhase.CLR
@@ -389,10 +393,12 @@ def calculate_damage(
     did_hit = random.uniform(0, 100) < hit_pct
 
     if not did_hit:
-        return 0.0, False
+        return 0.0, False, False
 
     # Damage calculation
-    base_dmg = (acting_part.attr.power + skill_level * 1.5) * random.uniform(0.9, 1.1)
+    variance = random.uniform(0.9, 1.1)
+    is_critical = variance >= 1.05
+    base_dmg = (acting_part.attr.power + skill_level * 1.5) * variance
     target_armor = target.part_head.attr.armor  # attacks land on the body / head for now
     final_dmg = max(1.0, base_dmg - (target_armor / 2))
 
@@ -403,7 +409,11 @@ def calculate_damage(
     if target_is_cooling:
         final_dmg *= 1.2
 
-    return round(final_dmg, 1), True
+    # Critical hits deal 1.5× damage
+    if is_critical:
+        final_dmg *= 1.5
+
+    return round(final_dmg, 1), True, is_critical
 
 
 # ---------------------------------------------------------------------------
@@ -602,9 +612,11 @@ class BattleEngine:
             if target is None:
                 return events
 
-            dmg, hit = calculate_damage(actor, acting_part, target)
+            dmg, hit, is_critical = calculate_damage(actor, acting_part, target)
             part_destroyed_msg = ""
             note = "（放熱中につき回避不能！）" if hit and target.phase == TimelinePhase.CLR else ""
+            if is_critical and hit:
+                note = "★クリティカルヒット！★" + (f" {note}" if note else "")
 
             if hit and dmg > 0:
                 # Damage the target's head by default (simplified model)
@@ -630,6 +642,7 @@ class BattleEngine:
                     action=skill.value,
                     damage=dmg,
                     hit=hit,
+                    is_critical=is_critical,
                     special=acting_part.special_effect.value,
                     part_destroyed=part_destroyed_msg,
                     note=note,
