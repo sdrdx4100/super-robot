@@ -1019,6 +1019,250 @@
       100% { stroke-dashoffset: -18; }
     }
 
+    /* ===== NEW BATTLE EFFECTS ===== */
+
+    /* Screen shake on hit */
+    @keyframes screen-shake {
+      0%, 100% { transform: translate(0, 0); }
+      10% { transform: translate(-6px, 3px); }
+      20% { transform: translate(5px, -4px); }
+      30% { transform: translate(-4px, 2px); }
+      40% { transform: translate(3px, -3px); }
+      50% { transform: translate(-2px, 4px); }
+      60% { transform: translate(4px, -2px); }
+      70% { transform: translate(-3px, 1px); }
+      80% { transform: translate(2px, -1px); }
+      90% { transform: translate(-1px, 2px); }
+    }
+
+    /* Strong shake for critical hits */
+    @keyframes screen-shake-critical {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      8% { transform: translate(-10px, 5px) rotate(-1.5deg); }
+      16% { transform: translate(9px, -7px) rotate(1.2deg); }
+      24% { transform: translate(-8px, 4px) rotate(-1deg); }
+      32% { transform: translate(7px, -6px) rotate(0.8deg); }
+      40% { transform: translate(-5px, 3px) rotate(-0.6deg); }
+      48% { transform: translate(6px, -4px) rotate(0.5deg); }
+      56% { transform: translate(-4px, 2px) rotate(-0.4deg); }
+      64% { transform: translate(3px, -3px) rotate(0.3deg); }
+      72% { transform: translate(-2px, 1px) rotate(-0.2deg); }
+      80% { transform: translate(2px, -1px) rotate(0.1deg); }
+    }
+
+    #battle-track.shake {
+      animation: screen-shake .32s ease-out;
+    }
+
+    #battle-track.shake-critical {
+      animation: screen-shake-critical .5s ease-out;
+    }
+
+    /* Hit stop freeze effect */
+    #battle-track.hitstop {
+      animation-play-state: paused !important;
+    }
+
+    #battle-track.hitstop .field-unit {
+      transition: none !important;
+    }
+
+    /* Critical hit cut-in banner */
+    #critical-cutin {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%) scaleY(0);
+      height: 80px;
+      background: linear-gradient(90deg,
+        transparent,
+        rgba(251, 191, 36, .15) 10%,
+        rgba(251, 191, 36, .25) 45%,
+        rgba(251, 191, 36, .25) 55%,
+        rgba(251, 191, 36, .15) 90%,
+        transparent
+      );
+      border-top: 2px solid rgba(251, 191, 36, .8);
+      border-bottom: 2px solid rgba(251, 191, 36, .8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 30;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #critical-cutin.active {
+      animation: cutin-appear .6s ease-out forwards;
+    }
+
+    #critical-cutin .cutin-text {
+      font-size: clamp(1.6rem, 4vw, 3rem);
+      font-weight: 900;
+      letter-spacing: .25em;
+      color: #fef3c7;
+      text-shadow:
+        0 0 20px rgba(251, 191, 36, .8),
+        0 0 40px rgba(251, 191, 36, .5),
+        0 0 80px rgba(251, 191, 36, .3);
+      transform: scaleX(1.15);
+    }
+
+    @keyframes cutin-appear {
+      0% {
+        opacity: 0;
+        transform: translateY(-50%) scaleY(0);
+      }
+      15% {
+        opacity: 1;
+        transform: translateY(-50%) scaleY(1);
+      }
+      75% {
+        opacity: 1;
+        transform: translateY(-50%) scaleY(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(-50%) scaleY(0.3);
+      }
+    }
+
+    /* Critical damage number — gold, larger */
+    #damage-number.critical {
+      color: var(--gold) !important;
+      font-size: clamp(1.8rem, 5vw, 3.6rem);
+      text-shadow:
+        0 0 16px rgba(251, 191, 36, .8),
+        0 0 32px rgba(251, 191, 36, .5);
+    }
+
+    @keyframes damage-pop-critical {
+      0% { opacity: 0; transform: translate(-50%, 14px) scale(.3); }
+      12% { opacity: 1; transform: translate(-50%, -16px) scale(1.3); }
+      30% { transform: translate(-50%, -22px) scale(1.05); }
+      60% { opacity: 1; transform: translate(-50%, -28px) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -52px) scale(.88); }
+    }
+
+    #damage-number.critical.show {
+      animation: damage-pop-critical 1.1s ease-out forwards;
+    }
+
+    /* Low HP spark / smoke effects on robot SVG */
+    @keyframes spark-flicker {
+      0%, 100% { opacity: .7; transform: translate(0, 0) scale(1); }
+      25% { opacity: 1; transform: translate(2px, -3px) scale(1.2); }
+      50% { opacity: .4; transform: translate(-1px, 1px) scale(.8); }
+      75% { opacity: .9; transform: translate(1px, -2px) scale(1.1); }
+    }
+
+    @keyframes smoke-rise {
+      0% { opacity: .5; transform: translateY(0) scale(.6); }
+      50% { opacity: .3; transform: translateY(-8px) scale(1); }
+      100% { opacity: 0; transform: translateY(-16px) scale(1.3); }
+    }
+
+    .spark-particle {
+      animation: spark-flicker .4s ease-in-out infinite;
+    }
+
+    .smoke-particle {
+      animation: smoke-rise 1.2s ease-out infinite;
+    }
+
+    /* KO / Victory dramatic flash */
+    @keyframes ko-flash {
+      0% { opacity: 0; }
+      10% { opacity: .8; }
+      20% { opacity: 0; }
+      30% { opacity: .6; }
+      40% { opacity: 0; }
+      50% { opacity: .3; }
+      100% { opacity: 0; }
+    }
+
+    #ko-overlay {
+      position: fixed;
+      inset: 0;
+      background: white;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    #ko-overlay.active {
+      animation: ko-flash .7s ease-out forwards;
+    }
+
+    /* Victory banner */
+    @keyframes victory-slide {
+      0% { transform: translateX(-120%); opacity: 0; }
+      20% { transform: translateX(0); opacity: 1; }
+      80% { transform: translateX(0); opacity: 1; }
+      100% { transform: translateX(120%); opacity: 0; }
+    }
+
+    #victory-banner {
+      position: fixed;
+      top: 50%;
+      left: 0;
+      right: 0;
+      transform: translateX(-120%);
+      text-align: center;
+      padding: 24px;
+      background: linear-gradient(90deg,
+        transparent,
+        rgba(5, 9, 20, .95) 15%,
+        rgba(5, 9, 20, .95) 85%,
+        transparent
+      );
+      border-top: 3px solid var(--gold);
+      border-bottom: 3px solid var(--gold);
+      font-size: clamp(1.8rem, 5vw, 3.5rem);
+      font-weight: 900;
+      letter-spacing: .2em;
+      color: var(--gold);
+      text-shadow: 0 0 30px rgba(251, 191, 36, .6);
+      z-index: 101;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #victory-banner.active {
+      animation: victory-slide 2.5s ease-in-out forwards;
+    }
+
+    /* Impact ring burst for hits */
+    @keyframes impact-ring {
+      0% { transform: translate(-50%, -50%) scale(.3); opacity: .9; border-width: 4px; }
+      100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; border-width: 1px; }
+    }
+
+    #impact-ring {
+      position: absolute;
+      left: 73%;
+      top: 42%;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      border: 4px solid rgba(251, 191, 36, .8);
+      transform: translate(-50%, -50%) scale(.3);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #impact-ring.active {
+      animation: impact-ring .5s ease-out forwards;
+    }
+
+    #impact-ring.critical {
+      border-color: rgba(251, 191, 36, 1);
+      width: 90px;
+      height: 90px;
+      animation: impact-ring .7s ease-out forwards;
+    }
+
 
     /* Tactical layout rebuild */
     #workspace {
@@ -1516,12 +1760,17 @@
             <div class="focus-unit target" id="focus-target"></div>
             <div id="declaration-banner"></div>
             <div id="impact-flash"></div>
+            <div id="impact-ring"></div>
+            <div id="critical-cutin"><span class="cutin-text">CRITICAL HIT!!</span></div>
             <div id="damage-number"></div>
             <div id="reveal-popup"></div>
             <div id="destroy-warning">PART DESTROYED!</div>
           </div>
         </div>
       </section>
+
+      <div id="ko-overlay"></div>
+      <div id="victory-banner"></div>
 
       <section id="event-log">
         <h2>📜 戦闘ログ</h2>
@@ -1827,6 +2076,32 @@ function buildRobotSVG(unit, team, extraClass = '', idPrefix = 'robot') {
   const lC = parts.la.current_hp <= 0 ? 'class="part-destroy"' : '';
   const gC = parts.leg.current_hp <= 0 ? 'class="part-destroy"' : '';
 
+  // Low HP effects: calculate overall HP ratio
+  const totalHp = parts.head.current_hp + parts.ra.current_hp + parts.la.current_hp + parts.leg.current_hp;
+  const totalMax = parts.head.max_hp + parts.ra.max_hp + parts.la.max_hp + parts.leg.max_hp;
+  const hpRatio = totalMax > 0 ? totalHp / totalMax : 1;
+
+  // Spark and smoke particles for damaged units
+  let damageEffects = '';
+  if (!unit.incapacitated && hpRatio <= 0.5 && hpRatio > 0.25) {
+    // Medium damage: small sparks
+    damageEffects = `
+      <circle class="spark-particle" cx="18" cy="42" r="1.5" fill="#fbbf24" opacity=".8" style="animation-delay:0s"></circle>
+      <circle class="spark-particle" cx="62" cy="48" r="1.2" fill="#fb923c" opacity=".7" style="animation-delay:.15s"></circle>
+      <circle class="spark-particle" cx="35" cy="60" r="1" fill="#fbbf24" opacity=".6" style="animation-delay:.3s"></circle>`;
+  } else if (!unit.incapacitated && hpRatio <= 0.25 && hpRatio > 0) {
+    // Critical damage: sparks + smoke
+    damageEffects = `
+      <circle class="spark-particle" cx="16" cy="40" r="2" fill="#f87171" opacity=".9" style="animation-delay:0s"></circle>
+      <circle class="spark-particle" cx="58" cy="44" r="1.8" fill="#fbbf24" opacity=".85" style="animation-delay:.1s"></circle>
+      <circle class="spark-particle" cx="30" cy="58" r="1.5" fill="#fb923c" opacity=".8" style="animation-delay:.2s"></circle>
+      <circle class="spark-particle" cx="50" cy="36" r="1.3" fill="#f87171" opacity=".75" style="animation-delay:.25s"></circle>
+      <circle class="spark-particle" cx="42" cy="64" r="1.8" fill="#fbbf24" opacity=".7" style="animation-delay:.35s"></circle>
+      <circle class="smoke-particle" cx="32" cy="35" r="4" fill="rgba(148,163,184,.4)" style="animation-delay:0s"></circle>
+      <circle class="smoke-particle" cx="48" cy="38" r="3.5" fill="rgba(148,163,184,.35)" style="animation-delay:.4s"></circle>
+      <circle class="smoke-particle" cx="40" cy="55" r="3" fill="rgba(148,163,184,.3)" style="animation-delay:.8s"></circle>`;
+  }
+
   return `
     <svg class="robot-svg ${team === 'B' ? 'team-b' : ''} ${extraClass}" id="${idPrefix}-${unit.id}" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
       <g ${gC}>
@@ -1850,6 +2125,7 @@ function buildRobotSVG(unit, team, extraClass = '', idPrefix = 'robot') {
         <circle cx="35" cy="28" r="2" fill="${parts.head.current_hp > 0 ? '#facc15' : '#334155'}"></circle>
         <circle cx="45" cy="28" r="2" fill="${parts.head.current_hp > 0 ? '#facc15' : '#334155'}"></circle>
       </g>
+      ${damageEffects}
       ${unit.incapacitated ? `
         <line x1="10" y1="10" x2="70" y2="70" stroke="#f87171" stroke-width="3" opacity=".72"></line>
         <line x1="70" y1="10" x2="10" y2="70" stroke="#f87171" stroke-width="3" opacity=".72"></line>
@@ -2014,6 +2290,7 @@ function appendEvents(events) {
   const log = document.getElementById('log-entries');
   events.forEach(ev => {
     const actorClass = ev.actor_team === 'A' ? 'actor-a' : 'actor-b';
+    const critTag = ev.is_critical ? '<span style="color:var(--gold);font-weight:900"> ★CRITICAL</span>' : '';
     let body = '';
     if (ev.action === 'HEAL') {
       body = `<span class="heal">+${Math.abs(ev.damage).toFixed(0)} 回復</span> → ${ev.target_name}`;
@@ -2028,7 +2305,7 @@ function appendEvents(events) {
     } else if (!ev.hit) {
       body = `ミス！（${ev.target_name}）`;
     } else {
-      body = `<span class="dmg">${ev.damage.toFixed(0)} ダメージ</span> → ${ev.target_name}`;
+      body = `<span class="dmg">${ev.damage.toFixed(0)} ダメージ</span>${critTag} → ${ev.target_name}`;
       if (ev.note) body += ` ${ev.note}`;
       if (ev.part_destroyed) body += ` <span class="destroy">🔥${ev.part_destroyed}</span>`;
     }
@@ -2049,7 +2326,8 @@ function describeEvent(eventMeta) {
   const actionName = eventMeta.action || '更新';
   if (actionName === 'HEAL') return `${actorName} が ${targetName === '対象なし' ? '味方' : targetName} を回復`;
   if (!eventMeta.hit) return `${actorName} の ${actionName} はミス`;
-  return `${actorName} → ${targetName} / ${actionName}`;
+  const critLabel = eventMeta.is_critical ? ' ★CRITICAL' : '';
+  return `${actorName} → ${targetName} / ${actionName}${critLabel}`;
 }
 
 function updatePreviewMeta(s, eventMeta = null) {
@@ -2098,16 +2376,28 @@ function triggerBaseCardAnimations(events, s) {
 function updateBanner(s) {
   const banner = document.getElementById('status-banner');
   if (s.is_finished) {
+    let winnerName = '';
     if (s.winner === 'A') {
       banner.textContent = `🏆 ${s.team_a.name} の勝利！`;
       banner.className = 'win-a';
+      winnerName = s.team_a.name;
     } else if (s.winner === 'B') {
       banner.textContent = `🏆 ${s.team_b.name} の勝利！`;
       banner.className = 'win-b';
+      winnerName = s.team_b.name;
     } else {
       banner.textContent = '引き分け';
       banner.className = '';
+      winnerName = '引き分け';
     }
+    // Victory banner flyover
+    const vBanner = document.getElementById('victory-banner');
+    vBanner.textContent = winnerName ? `🏆 ${winnerName} WIN! 🏆` : '引き分け';
+    vBanner.classList.remove('active');
+    void vBanner.offsetWidth;
+    vBanner.classList.add('active');
+    vBanner.addEventListener('animationend', () => vBanner.classList.remove('active'), {once: true});
+
     stopAuto();
   } else {
     banner.textContent = `ターン ${s.tick}`;
@@ -2150,11 +2440,15 @@ function clearCinematic() {
   document.getElementById('focus-target').innerHTML = '';
   document.getElementById('declaration-banner').textContent = '';
   document.getElementById('impact-flash').classList.remove('active');
+  document.getElementById('impact-ring').classList.remove('active', 'critical');
+  document.getElementById('critical-cutin').classList.remove('active');
   document.getElementById('damage-number').textContent = '';
-  document.getElementById('damage-number').classList.remove('show');
+  document.getElementById('damage-number').classList.remove('show', 'critical');
   document.getElementById('reveal-popup').innerHTML = '';
   document.getElementById('reveal-popup').classList.remove('active');
   document.getElementById('destroy-warning').classList.remove('active');
+  const bt = document.getElementById('battle-track');
+  bt.classList.remove('shake', 'shake-critical', 'hitstop');
   resetCardFocus();
   renderTimeline(state);
   renderBattlefield(state);
@@ -2283,6 +2577,10 @@ async function playEventSequence(eventMeta) {
   const {actor, target, actorTeam} = primeCinematicUnits(eventMeta);
   if (!actor) return;
 
+  const isCritical = !!eventMeta.is_critical;
+  const isOffensive = ['SHOOT', 'MELEE'].includes(eventMeta.action);
+  const didHit = eventMeta.hit;
+
   document.body.classList.add('cinematic-mode');
   const layer = document.getElementById('cinematic-layer');
   layer.className = 'active phase-selection';
@@ -2318,12 +2616,52 @@ async function playEventSequence(eventMeta) {
   // Force a reflow so the flash animation reliably restarts for each action.
   void document.getElementById('impact-flash').offsetWidth;
   document.getElementById('impact-flash').classList.add('active');
+
+  // --- Hit-stop: brief freeze on impact ---
+  const battleTrack = document.getElementById('battle-track');
+  if (isOffensive && didHit) {
+    battleTrack.classList.add('hitstop');
+    await sleep(isCritical ? 180 : 100);
+    battleTrack.classList.remove('hitstop');
+  }
+
+  // --- Screen shake ---
+  if (isOffensive && didHit) {
+    battleTrack.classList.remove('shake', 'shake-critical');
+    void battleTrack.offsetWidth;
+    battleTrack.classList.add(isCritical ? 'shake-critical' : 'shake');
+    battleTrack.addEventListener('animationend', () => {
+      battleTrack.classList.remove('shake', 'shake-critical');
+    }, {once: true});
+  }
+
+  // --- Impact ring burst ---
+  const impactRing = document.getElementById('impact-ring');
+  if (isOffensive && didHit) {
+    impactRing.classList.remove('active', 'critical');
+    void impactRing.offsetWidth;
+    if (isCritical) impactRing.classList.add('critical');
+    impactRing.classList.add('active');
+    impactRing.addEventListener('animationend', () => {
+      impactRing.classList.remove('active', 'critical');
+    }, {once: true});
+  }
+
   if (target) {
     const card = document.getElementById(`card-${target.id}`);
     if (card) {
       card.classList.add('hit-shake');
       card.addEventListener('animationend', () => card.classList.remove('hit-shake'), {once: true});
     }
+  }
+
+  // --- Critical hit cut-in ---
+  if (isCritical && isOffensive && didHit) {
+    const cutin = document.getElementById('critical-cutin');
+    cutin.classList.remove('active');
+    void cutin.offsetWidth;
+    cutin.classList.add('active');
+    cutin.addEventListener('animationend', () => cutin.classList.remove('active'), {once: true});
   }
 
   await sleep(120);
@@ -2339,6 +2677,7 @@ async function playEventSequence(eventMeta) {
   }
 
   const damageNumber = document.getElementById('damage-number');
+  damageNumber.classList.remove('show', 'critical');
   if (eventMeta.action === 'HEAL') {
     damageNumber.textContent = `+${Math.abs(eventMeta.damage).toFixed(0)}`;
     damageNumber.style.color = 'var(--green)';
@@ -2346,17 +2685,25 @@ async function playEventSequence(eventMeta) {
     damageNumber.textContent = 'MISS';
     damageNumber.style.color = 'var(--gold)';
   } else {
-    damageNumber.textContent = `-${Math.max(0, Number(eventMeta.damage || 0)).toFixed(0)}`;
-    damageNumber.style.color = 'var(--red)';
+    const dmgText = `-${Math.max(0, Number(eventMeta.damage || 0)).toFixed(0)}`;
+    damageNumber.textContent = isCritical ? `★${dmgText}` : dmgText;
+    damageNumber.style.color = isCritical ? 'var(--gold)' : 'var(--red)';
+    if (isCritical) damageNumber.classList.add('critical');
   }
-  damageNumber.classList.remove('show');
   // Force a reflow so the damage pop animation restarts with the new value.
   void damageNumber.offsetWidth;
   damageNumber.classList.add('show');
 
-  await sleep(PHASE_TIMINGS.impact);
+  await sleep(isCritical ? PHASE_TIMINGS.impact + 200 : PHASE_TIMINGS.impact);
 
   if (eventMeta.part_destroyed) {
+    // KO flash for part destruction
+    const koOverlay = document.getElementById('ko-overlay');
+    koOverlay.classList.remove('active');
+    void koOverlay.offsetWidth;
+    koOverlay.classList.add('active');
+    koOverlay.addEventListener('animationend', () => koOverlay.classList.remove('active'), {once: true});
+
     document.getElementById('destroy-warning').classList.add('active');
     await sleep(PHASE_TIMINGS.destroy);
   }
